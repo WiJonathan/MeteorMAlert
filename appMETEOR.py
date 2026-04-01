@@ -32,7 +32,7 @@ with st.sidebar.form("location_form"):
     new_days = st.slider("Prediction Window (Days)", 1, 10, 10)
     
     # THE TRIGGER
-    submitted = st.form_submit_button("Apply & Recalculate")
+    submitted = st.form_submit_button("Apply & recalculate")
 
 # Global variables assigned from the form
 LAT, LNG, ALT = new_lat, new_lng, new_alt
@@ -44,7 +44,6 @@ TARGET_SATS = {"Meteor M2-3": 57166, "Meteor M2-4": 59051}
 # --- 3. HELPER FUNCTIONS ---
 @st.cache_data(ttl=43200)
 def get_passes(norad_id, name, lat, lng, alt, days, min_el):
-    # The cache triggers a fresh download if ANY sidebar value changes
     url = f"https://api.n2yo.com/rest/v1/satellite/radiopasses/{norad_id}/{lat}/{lng}/{alt}/{days}/{min_el}/&apiKey={API_KEY}"
     try:
         data = requests.get(url).json()
@@ -121,7 +120,7 @@ with st.spinner('Updating orbital schedule...'):
         df = pd.DataFrame(all_data).sort_values("RawTime")
         next_pass = df.iloc[0]
         
-        st.success(f"🎯 **Next Prime Capture:** {next_pass['Satellite']} at {next_pass['Local Time']}")
+        st.success(f"🎯 **Next pass:** {next_pass['Satellite']} at {next_pass['Local Time']}")
         
         col1, col2, col3 = st.columns(3)
         col1.metric("Max Elevation", next_pass['Max El'])
@@ -134,8 +133,8 @@ with st.spinner('Updating orbital schedule...'):
     else:
         st.warning("No eligible future passes found for this location.")
 
-    with st.expander("See Rejected 'Night' Passes"):
+    with st.expander("See Rejected Night Passes"):
         for msg in rejected_passes:
             st.write(msg)
 
-st.info(f"📍 Station: {LAT}, {LNG} | Threshold: {MIN_EL}° | Timezone: {new_tz}")
+st.info(f"📍 Location: {LAT}, {LNG} | Threshold: {MIN_EL}° | Timezone: {new_tz}")
