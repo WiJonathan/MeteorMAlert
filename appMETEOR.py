@@ -16,7 +16,7 @@ except:
 
 # --- 2. SIDEBAR: CUSTOM LOCATION ---
 with st.sidebar.form("location_form"):
-    show_night = st.sidebar.checkbox("Show Nigh passes", value=False)
+    show_night = st.sidebar.checkbox("Show Night passes", value=False)
     st.header("Location and threshold")
     st.write("Adjust settings and click apply to update.")
     
@@ -68,7 +68,7 @@ rejected_passes = []
 # Get the current time in the user's selected timezone
 now = datetime.datetime.now(LOCAL_TZ)
 
-with st.spinner('Updating orbital schedule...'):
+with st.spinner('Locking onto signal...'):
     for name, sid in TARGET_SATS.items():
         # Using the same cached function
         passes = get_passes(sid, name, LAT, LNG, ALT, DAYS, MIN_EL)
@@ -134,7 +134,7 @@ with st.spinner('Updating orbital schedule...'):
     else:
         st.warning("No eligible future passes found for this location.")
 
-    with st.expander("See Rejected Night Passes"):
+    with st.expander("See Rejected Passes"):
         for msg in rejected_passes:
             st.write(msg)
 
