@@ -46,7 +46,7 @@ st.subheader("Daylight Passes > 50° Elevation")
 # --- 4. MAIN LOGIC (REVISED) ---
 sun = Sun(LAT, LNG)
 all_data = []
-rejected_passes = [] # To help you debug!
+rejected_passes = [] # To help debug!
 
 if st.button('Refresh Pass Predictions'):
     with st.spinner('Calculating orbits and solar angles...'):
@@ -59,19 +59,19 @@ if st.button('Refresh Pass Predictions'):
                 srise_utc = sun.get_sunrise_time(start_utc)
                 sset_utc = sun.get_sunset_time(start_utc)
                 
-                # CONVERT EVERYTHING TO MINUTES FROM MIDNIGHT (The Hammer)
-                # This removes all timezone/date ambiguity
+                # CONVERT EVERYTHING TO MINUTES FROM MIDNIGHT
                 pass_min = start_utc.hour * 60 + start_utc.minute
                 srise_min = srise_utc.hour * 60 + srise_utc.minute
                 sset_min = sset_utc.hour * 60 + sset_utc.minute
                 
-                # Add our 30-minute buffer
+                # Add 30-minute buffer
                 srise_min -= 30
                 sset_min += 30
 
                 # Simple math comparison
                 if srise_min <= pass_min <= sset_min:
                     start_dt_local = start_utc.astimezone(LOCAL_TZ)
+                    duration_seconds = p['endUTC'] - p['startUTC']
                     all_data.append({
                         "Satellite": name,
                         "Local Time": start_dt_local.strftime('%d %b, %H:%M'),
