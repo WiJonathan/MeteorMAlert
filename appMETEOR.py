@@ -53,19 +53,25 @@ if st.button('Refresh Pass Predictions'):
         for name, sid in TARGET_SATS.items():
             passes = get_passes(sid, name)
             for p in passes:
-                start_dt = to_local(p['startUTC'])
-                srise = sun.get_sunrise_time(start_dt).astimezone(LOCAL_TZ)
-                sset = sun.get_sunset_time(start_dt).astimezone(LOCAL_TZ)
+                # 1. Get everything in pure UTC first
+                start_utc = datetime.datetime.fromtimestamp(p['startUTC'], datetime.timezone.utc)
                 
-                # FILTER: Only show if it's daylight
-                if srise < start_dt < sset:
+                # 2. Get Sunrise/Sunset for that specific day in UTC
+                srise_utc = sun.get_sunrise_time(start_utc)
+                sset_utc = sun.get_sunset_time(start_utc)
+                
+                # DEBUG: Uncomment the line below to see ALL passes and why they fail
+                # st.write(f"{name}: Pass at {start_utc}, Sun: {srise_utc} to {sset_utc}")
+
+                if srise_utc < start_utc < sset_utc:
+                    start_dt_local = start_utc.astimezone(LOCAL_TZ)
                     all_data.append({
                         "Satellite": name,
-                        "Local Time": start_dt.strftime('%d %b, %H:%M'),
+                        "Local Time": start_dt_local.strftime('%d %b, %H:%M'),
                         "Max El": f"{p['maxEl']}°",
                         "Direction": f"{p['startAzCompass']} ➔ {p['endAzCompass']}",
                         "Duration": f"{p['duration'] // 60}m {p['duration'] % 60}s",
-                        "RawTime": p['startUTC'] # For sorting
+                        "RawTime": p['startUTC']
                     })
 
         if all_data:
