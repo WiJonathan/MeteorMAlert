@@ -54,10 +54,9 @@ sun = Sun(LAT, LNG)
 all_data = []
 rejected_passes = []
 
-if st.button('Refresh Pass Predictions'):
+if st.button('Calculate/Refresh Pass Predictions'):
     with st.spinner('Comparing sweet passes...'):
         for name, sid in TARGET_SATS.items():
-            # PASS THE SIDEBAR VARIABLES HERE
             passes = get_passes(sid, name, LAT, LNG, ALT, DAYS, MIN_EL)
             
             for p in passes:
