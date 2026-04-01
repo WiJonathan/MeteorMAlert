@@ -138,4 +138,4 @@ with st.spinner('Updating orbital schedule...'):
         for msg in rejected_passes:
             st.write(msg)
 
-st.info(f"📍 Station: {LAT}, {LNG} | Threshold: {MIN_EL}° | Timezone: {selected_tz}")
+st.info(f"📍 Station: {LAT}, {LNG} | Threshold: {MIN_EL}° | Timezone: {new_tz}")
