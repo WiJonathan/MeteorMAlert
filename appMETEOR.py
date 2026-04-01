@@ -79,36 +79,35 @@ if st.button('Calculate/Refresh Pass Predictions'):
                 if (srise_min - 30) <= pass_min <= (sset_min + 30):
                     start_dt_local = start_utc.astimezone(LOCAL_TZ)
                     duration_seconds = p['endUTC'] - p['startUTC']
+                    
                     # --- CALCULATE PEAK DIRECTION ---
-                    # Get the average of start and end azimuth for the 'Peak'
                     start_az = p['startAz']
                     end_az = p['endAz']
 
-                    # Handle the 360-degree wrap-around (e.g., 350 to 10 degrees)
                     if abs(end_az - start_az) > 180:
                         if start_az > end_az:
                             avg_az = (start_az + end_az + 360) / 2
                         else:
                             avg_az = (start_az + end_az - 360) / 2
-                        else:
-                            avg_az = (start_az + end_az) / 2
+                    else:
+                        avg_az = (start_az + end_az) / 2
 
-                    avg_az %= 360 # Keep it 0-360
-
-                    # Convert degrees to a simple compass string
+                    avg_az %= 360 
                     directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
                     ix = int((avg_az + 11.25) / 22.5)
                     peak_compass = directions[ix % 16]
 
-                 all_data.append({
+                    # This block must be indented exactly once more than the 'if' above it
+                    all_data.append({
                         "Satellite": name,
                         "Local Time": start_dt_local.strftime('%d %b, %H:%M'),
-                        "Max El": f"{p['maxEl']}°, @ {peak_compass}",
+                        "Max El": f"{p['maxEl']}° @ {peak_compass}",
                         "Direction": f"{p['startAzCompass']} ➔ {p['endAzCompass']}",
                         "Duration": f"{duration_seconds // 60}m {duration_seconds % 60}s",
                         "RawTime": p['startUTC']
                     })
                 else:
+                    # This 'else' must align perfectly with the 'if (srise_min - 30)...'
                     rejected_passes.append(f"❌ {name} at {start_utc.strftime('%H:%M')} UTC (Sun: {srise_utc.strftime('%H:%M')} - {sset_utc.strftime('%H:%M')})")
 
         if all_data:
