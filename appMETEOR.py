@@ -43,27 +43,29 @@ def to_local(utc_ts):
 st.title("🛰️ Meteor-M Radio Passes Ruurlo")
 st.subheader("Daylight Passes > 50° Elevation")
 
-# --- 4. MAIN LOGIC ---
+# --- 4. MAIN LOGIC (REVISED) ---
 sun = Sun(LAT, LNG)
 all_data = []
+rejected_passes = [] # To help you debug!
 
 if st.button('Refresh Pass Predictions'):
     with st.spinner('Calculating orbits and solar angles...'):
-        # Get target Meteor passes
         for name, sid in TARGET_SATS.items():
             passes = get_passes(sid, name)
             for p in passes:
-                # 1. Get everything in pure UTC first
+                # Get UTC time from API
                 start_utc = datetime.datetime.fromtimestamp(p['startUTC'], datetime.timezone.utc)
                 
-                # 2. Get Sunrise/Sunset for that specific day in UTC
-                srise_utc = sun.get_sunrise_time(start_utc)
-                sset_utc = sun.get_sunset_time(start_utc)
+                # Get Sunrise/Sunset in UTC (using 'replace' to ensure they are timezone-naive for the library)
+                srise_utc = sun.get_sunrise_time(start_utc).replace(tzinfo=datetime.timezone.utc)
+                sset_utc = sun.get_sunset_time(start_utc).replace(tzinfo=datetime.timezone.utc)
                 
-                # DEBUG: Uncomment the line below to see ALL passes and why they fail
-                # st.write(f"{name}: Pass at {start_utc}, Sun: {srise_utc} to {sset_utc}")
+                # ADD A 30-MINUTE BUFFER (Capture the twilight!)
+                srise_buffered = srise_utc - datetime.timedelta(minutes=30)
+                sset_buffered = sset_utc + datetime.timedelta(minutes=30)
 
-                if srise_utc < start_utc < sset_utc:
+                # CHECK: Is it "Daylightish"?
+                if srise_buffered < start_utc < sset_buffered:
                     start_dt_local = start_utc.astimezone(LOCAL_TZ)
                     all_data.append({
                         "Satellite": name,
@@ -73,27 +75,28 @@ if st.button('Refresh Pass Predictions'):
                         "Duration": f"{p['duration'] // 60}m {p['duration'] % 60}s",
                         "RawTime": p['startUTC']
                     })
+                else:
+                    # Keep track of why it was hidden
+                    rejected_passes.append(f"❌ {name} at {start_utc.strftime('%H:%M')} UTC (Sun: {srise_utc.strftime('%H:%M')} - {sset_utc.strftime('%H:%M')})")
 
         if all_data:
-            # Sort by time
             df = pd.DataFrame(all_data).sort_values("RawTime")
-            
-            # --- 5. THE "BIG PASS" HIGHLIGHT ---
             next_pass = df.iloc[0]
             st.success(f"🎯 **Next Prime Capture:** {next_pass['Satellite']} at {next_pass['Local Time']}")
             
+            # (Metrics code stays the same...)
             col1, col2, col3 = st.columns(3)
             col1.metric("Max Elevation", next_pass['Max El'])
             col2.metric("Pass Length", next_pass['Duration'])
             col3.metric("Path", next_pass['Direction'])
-            
             st.divider()
-            
-            # --- 6. THE 10-DAY LIST ---
-            st.write("### 📅 Upcoming 10-Day Schedule")
             st.dataframe(df.drop(columns=["RawTime"]), use_container_width=True)
-            
         else:
-            st.warning("No high-elevation daylight passes found in the next 10 days.")
+            st.warning("No high-elevation daylight passes found.")
+            
+        # DEBUG SECTION (Only shows if you click it)
+        with st.expander("See Rejected 'Night' Passes"):
+            for msg in rejected_passes:
+                st.write(msg)
 
 st.info(f"📍 Station: {LAT}, {LNG} | Threshold: {MIN_EL}° | Timezone: CEST")
