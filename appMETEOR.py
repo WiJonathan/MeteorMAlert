@@ -53,19 +53,21 @@ if st.button('Refresh Pass Predictions'):
         for name, sid in TARGET_SATS.items():
             passes = get_passes(sid, name)
             for p in passes:
-                # Get UTC time from API
+                # 1. Force the pass time to be UTC aware
                 start_utc = datetime.datetime.fromtimestamp(p['startUTC'], datetime.timezone.utc)
                 
-                # Get Sunrise/Sunset in UTC (using 'replace' to ensure they are timezone-naive for the library)
+                # 2. Force Suntime to return UTC aware objects
+                # We do this by ensuring the input to the library is naive, 
+                # then immediately tagging the output as UTC.
                 srise_utc = sun.get_sunrise_time(start_utc).replace(tzinfo=datetime.timezone.utc)
                 sset_utc = sun.get_sunset_time(start_utc).replace(tzinfo=datetime.timezone.utc)
                 
-                # ADD A 30-MINUTE BUFFER (Capture the twilight!)
+                # 3. Buffer for twilight
                 srise_buffered = srise_utc - datetime.timedelta(minutes=30)
                 sset_buffered = sset_utc + datetime.timedelta(minutes=30)
 
-                # CHECK: Is it "Daylightish"?
-                if srise_buffered < start_utc < sset_buffered:
+                # Now the comparison will actually work!
+                if srise_buffered <= start_utc <= sset_buffered:
                     start_dt_local = start_utc.astimezone(LOCAL_TZ)
                     all_data.append({
                         "Satellite": name,
