@@ -29,7 +29,7 @@ with st.sidebar.form("location_form"):
     default_tz_idx = all_tz.index("Europe/Amsterdam") if "Europe/Amsterdam" in all_tz else 0
     new_tz = st.selectbox("Local Timezone", all_tz, index=default_tz_idx)
     
-    new_el = st.slider("Min Elevation (Deg)", 10, 90, 50)
+    new_el = st.slider("Min Elevation (Deg)", 10, 90, 40)
     new_days = st.slider("Prediction Window (Days)", 1, 10, 10)
     
     # THE TRIGGER
