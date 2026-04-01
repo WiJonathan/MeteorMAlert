@@ -77,7 +77,7 @@ if st.button('Refresh Pass Predictions'):
                         "Local Time": start_dt_local.strftime('%d %b, %H:%M'),
                         "Max El": f"{p['maxEl']}°",
                         "Direction": f"{p['startAzCompass']} ➔ {p['endAzCompass']}",
-                        "Duration": f"{p['duration'] // 60}m {p['duration'] % 60}s",
+                        "Duration": f"{duration_seconds // 60}m {duration_seconds % 60}s",
                         "RawTime": p['startUTC']
                     })
                 else:
