@@ -53,21 +53,24 @@ if st.button('Refresh Pass Predictions'):
         for name, sid in TARGET_SATS.items():
             passes = get_passes(sid, name)
             for p in passes:
-                # 1. Force the pass time to be UTC aware
                 start_utc = datetime.datetime.fromtimestamp(p['startUTC'], datetime.timezone.utc)
                 
-                # 2. Force Suntime to return UTC aware objects
-                # We do this by ensuring the input to the library is naive, 
-                # then immediately tagging the output as UTC.
-                srise_utc = sun.get_sunrise_time(start_utc).replace(tzinfo=datetime.timezone.utc)
-                sset_utc = sun.get_sunset_time(start_utc).replace(tzinfo=datetime.timezone.utc)
+                # Get Sunrise/Sunset
+                srise_utc = sun.get_sunrise_time(start_utc)
+                sset_utc = sun.get_sunset_time(start_utc)
                 
-                # 3. Buffer for twilight
-                srise_buffered = srise_utc - datetime.timedelta(minutes=30)
-                sset_buffered = sset_utc + datetime.timedelta(minutes=30)
+                # CONVERT EVERYTHING TO MINUTES FROM MIDNIGHT (The Hammer)
+                # This removes all timezone/date ambiguity
+                pass_min = start_utc.hour * 60 + start_utc.minute
+                srise_min = srise_utc.hour * 60 + srise_utc.minute
+                sset_min = sset_utc.hour * 60 + sset_utc.minute
+                
+                # Add our 30-minute buffer
+                srise_min -= 30
+                sset_min += 30
 
-                # Now the comparison will actually work!
-                if srise_buffered <= start_utc <= sset_buffered:
+                # Simple math comparison
+                if srise_min <= pass_min <= sset_min:
                     start_dt_local = start_utc.astimezone(LOCAL_TZ)
                     all_data.append({
                         "Satellite": name,
@@ -78,7 +81,6 @@ if st.button('Refresh Pass Predictions'):
                         "RawTime": p['startUTC']
                     })
                 else:
-                    # Keep track of why it was hidden
                     rejected_passes.append(f"❌ {name} at {start_utc.strftime('%H:%M')} UTC (Sun: {srise_utc.strftime('%H:%M')} - {sset_utc.strftime('%H:%M')})")
 
         if all_data:
