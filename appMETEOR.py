@@ -16,6 +16,7 @@ except:
 
 # --- 2. SIDEBAR: CUSTOM LOCATION ---
 with st.sidebar.form("location_form"):
+    show_night = st.sidebar.checkbox("Show Nigh passes", value=False)
     st.header("Location and threshold")
     st.write("Adjust settings and click apply to update.")
     
@@ -90,7 +91,7 @@ with st.spinner('Updating orbital schedule...'):
             srise_min = (srise_utc.hour * 60 + srise_utc.minute) - 30
             sset_min = (sset_utc.hour * 60 + sset_utc.minute) + 30
             
-            if srise_min <= pass_min <= sset_min:
+            if show_night or srise_min <= pass_min <= sset_min:
                 duration_seconds = p['endUTC'] - p['startUTC']
                 
                 # --- PEAK DIRECTION CALC ---
