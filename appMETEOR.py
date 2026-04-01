@@ -48,6 +48,10 @@ def get_passes(norad_id, name, lat, lng, alt, days, min_el):
 # --- 4. UI HEADER ---
 st.title("🛰️ Meteor-M Pass Predictions")
 st.subheader(f"Daylight Passes for {LAT}, {LNG}")
+st.info("""
+**Note to users:** This tool fetches real-time data from the **N2YO API**. 
+To help the app stay within the daily API limits, please try to **minimize unnecessary refreshes** unless you have changed your location or elevation settings. Happy hunting!
+""")
 
 # --- 5. MAIN LOGIC ---
 sun = Sun(LAT, LNG)
