@@ -27,6 +27,7 @@ MIN_EL = 50
 DAYS = 10
 
 # --- 2. HELPER FUNCTIONS ---
+@st.cache_data(ttl=43200)
 def get_passes(norad_id, name):
     url = f"https://api.n2yo.com/rest/v1/satellite/radiopasses/{norad_id}/{LAT}/{LNG}/{ALT}/{DAYS}/{MIN_EL}/&apiKey={API_KEY}"
     try:
