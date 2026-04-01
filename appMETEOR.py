@@ -15,7 +15,7 @@ except:
     st.stop()
 
 # --- 2. SIDEBAR: CUSTOM LOCATION ---
-st.sidebar.header("📡 Coordinates and threshold")
+st.sidebar.header("Location and threshold")
 
 # Default, but user-adjustable
 LAT = st.sidebar.number_input("Latitude", value=52.10, format="%.2f")
@@ -50,7 +50,7 @@ st.title("🛰️ Meteor-M Pass Predictions")
 st.subheader(f"Daylight Passes for {LAT}, {LNG}")
 st.info("""
 **Note to users:** This tool fetches real-time data from the **N2YO API**. 
-To help the app stay within the daily API limits, please try to **minimize unnecessary refreshes** unless you have changed your location or elevation settings by a lot. Happy hunting!
+To help the app stay within the daily API limits, please try to **minimize unnecessary refreshes** unless you have changed your settings by a lot. Happy hunting!
 """)
 
 # --- 5. MAIN LOGIC ---
@@ -79,11 +79,31 @@ if st.button('Calculate/Refresh Pass Predictions'):
                 if (srise_min - 30) <= pass_min <= (sset_min + 30):
                     start_dt_local = start_utc.astimezone(LOCAL_TZ)
                     duration_seconds = p['endUTC'] - p['startUTC']
-                    
-                    all_data.append({
+                    # --- CALCULATE PEAK DIRECTION ---
+                    # Get the average of start and end azimuth for the 'Peak'
+                    start_az = p['startAz']
+                    end_az = p['endAz']
+
+                    # Handle the 360-degree wrap-around (e.g., 350 to 10 degrees)
+                    if abs(end_az - start_az) > 180:
+                        if start_az > end_az:
+                            avg_az = (start_az + end_az + 360) / 2
+                        else:
+                            avg_az = (start_az + end_az - 360) / 2
+                        else:
+                            avg_az = (start_az + end_az) / 2
+
+                    avg_az %= 360 # Keep it 0-360
+
+                    # Convert degrees to a simple compass string
+                    directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+                    ix = int((avg_az + 11.25) / 22.5)
+                    peak_compass = directions[ix % 16]
+
+                 all_data.append({
                         "Satellite": name,
                         "Local Time": start_dt_local.strftime('%d %b, %H:%M'),
-                        "Max El": f"{p['maxEl']}°",
+                        "Max El": f"{p['maxEl']}°, @ {peak_compass}",
                         "Direction": f"{p['startAzCompass']} ➔ {p['endAzCompass']}",
                         "Duration": f"{duration_seconds // 60}m {duration_seconds % 60}s",
                         "RawTime": p['startUTC']
