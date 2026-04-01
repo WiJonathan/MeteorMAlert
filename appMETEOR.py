@@ -15,22 +15,29 @@ except:
     st.stop()
 
 # --- 2. SIDEBAR: CUSTOM LOCATION ---
-st.sidebar.header("Location and threshold")
+with st.sidebar.form("location_form"):
+    st.header("Location and threshold")
+    st.write("Adjust settings and click apply to update.")
+    
+    # Inputs inside the form don't trigger a rerun until the button is pressed
+    new_lat = st.number_input("Latitude", value=52.10, format="%.2f")
+    new_lng = st.number_input("Longitude", value=6.45, format="%.2f")
+    new_alt = st.number_input("Altitude (m)", value=18)
+    
+    all_tz = pytz.all_timezones
+    default_tz_idx = all_tz.index("Europe/Amsterdam") if "Europe/Amsterdam" in all_tz else 0
+    new_tz = st.selectbox("Local Timezone", all_tz, index=default_tz_idx)
+    
+    new_el = st.slider("Min Elevation (Deg)", 10, 90, 50)
+    new_days = st.slider("Prediction Window (Days)", 1, 10, 10)
+    
+    # THE TRIGGER
+    submitted = st.form_submit_button("Apply & Recalculate")
 
-# Default, but user-adjustable
-LAT = st.sidebar.number_input("Latitude", value=52.10, format="%.2f")
-LNG = st.sidebar.number_input("Longitude", value=6.45, format="%.2f")
-ALT = st.sidebar.number_input("Altitude (m)", value=18)
-
-# Timezone Selection
-all_tz = pytz.all_timezones
-default_tz = all_tz.index("Europe/Amsterdam") if "Europe/Amsterdam" in all_tz else 0
-selected_tz = st.sidebar.selectbox("Local Timezone", all_tz, index=default_tz)
-LOCAL_TZ = pytz.timezone(selected_tz)
-
-# Thresholds
-MIN_EL = st.sidebar.slider("Min Elevation (Deg)", 10, 90, 50)
-DAYS = st.sidebar.slider("Prediction Window (Days)", 1, 10, 10)
+# Global variables assigned from the form
+LAT, LNG, ALT = new_lat, new_lng, new_alt
+LOCAL_TZ = pytz.timezone(new_tz)
+MIN_EL, DAYS = new_el, new_days
 
 TARGET_SATS = {"Meteor M2-3": 57166, "Meteor M2-4": 59051}
 
