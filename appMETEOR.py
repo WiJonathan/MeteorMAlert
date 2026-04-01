@@ -12,10 +12,10 @@ st.set_page_config(page_title="Meteor-M Ground Station", page_icon="🛰️", la
 try:
     API_KEY = st.secrets["N2YO_API_KEY"]
 except:
-    st.error("Missing N2YO_API_KEY! Please add it to your secrets.")
+    st.error("Missing N2YO_API_KEY!")
     st.stop()
 
-# Station Location: Ruurlo, NL
+# Station Location
 LAT, LNG, ALT = 52.10, 6.45, 18 
 LOCAL_TZ = pytz.timezone("Europe/Amsterdam")
 
