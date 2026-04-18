@@ -3,3 +3,5 @@ suntime
 pandas
 streamlit
 pytz
+numpy
+skyfield
