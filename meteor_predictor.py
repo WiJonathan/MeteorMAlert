@@ -44,7 +44,7 @@ DAYS = new_days
 
 # --- 3. HELPER FUNCTIONS ---
 
-ts = load.timescale()
+ts = load.timescale(builtin=True)  # Never downloads anything — precision fine for pass prediction
 
 @st.cache_data(ttl=43200)  # Cache TLE data for 12 hours
 def fetch_tles(norad_ids: tuple):
