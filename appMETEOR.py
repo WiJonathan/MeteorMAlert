@@ -6,7 +6,7 @@ from skyfield.api import Topos, load, wgs84
 from skyfield import almanac
 
 # --- 1. SETTINGS ---
-st.set_page_config(page_title="Meteor-M Pass Predictor", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="Meteor-M Radio Passes", page_icon="🛰️", layout="wide")
 
 # Satellite NORAD IDs — fetch each by ID for reliability
 TARGET_SATS = {
