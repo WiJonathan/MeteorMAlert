@@ -114,7 +114,7 @@ rejected_passes = []
 with st.spinner("Calculating passes..."):
     for sat in tles:
         try:
-            times, events = sat.find_events(observer_topos, t0, t1, altitude_degrees=MIN_EL)
+            times, events = sat.find_events(observer_topos, t0, t1, altitude_degrees=0)
         except Exception as e:
             st.warning(f"⚠️ Error computing passes for {sat.name}: {e}")
             continue
@@ -128,6 +128,14 @@ with st.spinner("Calculating passes..."):
                 and events[i + 2] == 2
             ):
                 t_rise, t_peak, t_set = times[i], times[i + 1], times[i + 2]
+
+                # Skip passes that don't reach the minimum elevation
+                diff_peak_check = (sat - observer_topos).at(t_peak)
+                el_check, _, _ = diff_peak_check.altaz()
+                if el_check.degrees < MIN_EL:
+                    i += 3
+                    continue
+
                 daytime = is_daytime(t_rise, LAT, LNG)
 
                 if show_night or daytime:
