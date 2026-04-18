@@ -1,5 +1,4 @@
 requests
-suntime
 pandas
 streamlit
 pytz
