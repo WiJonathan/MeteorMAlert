@@ -1,12 +1,13 @@
 import streamlit as st
 import datetime
+import math
 import pandas as pd
 import pytz
-from skyfield.api import Topos, load, wgs84
-from skyfield import almanac
+import requests
+from skyfield.api import Topos, load, EarthSatellite
 
 # --- 1. SETTINGS ---
-st.set_page_config(page_title="Meteor-M Radio Passes", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="Meteor-M TLE Predictor", page_icon="🛰️", layout="wide")
 
 # Satellite NORAD IDs — fetch each by ID for reliability
 TARGET_SATS = {
@@ -43,20 +44,23 @@ DAYS = new_days
 
 # --- 3. HELPER FUNCTIONS ---
 
+ts = load.timescale()
+
 @st.cache_data(ttl=43200)  # Cache TLE data for 12 hours
 def fetch_tles(norad_ids: tuple):
-    ts = load.timescale()
+    """Fetch TLEs in-memory via requests — no disk I/O, fast."""
     sats = []
     for norad_id in norad_ids:
         try:
-            loaded = load.tle_file(tle_url(norad_id))
-            if loaded:
-                # Rename with our friendly name regardless of Celestrak naming
-                sat = loaded[0]
-                sat.name = TARGET_SATS[norad_id]
-                sats.append(sat)
-            else:
-                st.warning(f"⚠️ No TLE data returned for NORAD ID {norad_id}")
+            r = requests.get(tle_url(norad_id), timeout=10)
+            r.raise_for_status()
+            lines = [l.strip() for l in r.text.strip().splitlines() if l.strip()]
+            if len(lines) < 3:
+                st.warning(f"⚠️ Unexpected TLE format for NORAD ID {norad_id}")
+                continue
+            # lines[0] = name, lines[1] = TLE line 1, lines[2] = TLE line 2
+            sat = EarthSatellite(lines[1], lines[2], TARGET_SATS[norad_id], ts)
+            sats.append(sat)
         except Exception as e:
             st.warning(f"⚠️ Failed to load TLE for NORAD ID {norad_id}: {e}")
     return sats
@@ -66,17 +70,38 @@ def get_compass_dir(azimuth: float) -> str:
             "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
     return dirs[int((azimuth + 11.25) / 22.5) % 16]
 
-def is_daytime_skyfield(ts, t, observer) -> bool:
-    """Use Skyfield's almanac to correctly determine if it's daytime at the observer."""
-    eph = load('de421.bsp')
-    f = almanac.sunrise_sunset(eph, observer)
-    return bool(f(t))
+def sun_elevation_deg(dt_utc: datetime.datetime, lat_deg: float, lng_deg: float) -> float:
+    """
+    Pure-math solar elevation — no ephemeris file needed.
+    Accurate to ~±0.5° which is plenty for a daytime/night check.
+    """
+    # Day of year
+    n = dt_utc.timetuple().tm_yday
+    # Solar declination (degrees)
+    decl = 23.45 * math.sin(math.radians((360 / 365) * (n - 81)))
+    # Equation of time (minutes)
+    B = math.radians((360 / 365) * (n - 81))
+    eot = 9.87 * math.sin(2 * B) - 7.53 * math.cos(B) - 1.5 * math.sin(B)
+    # Solar noon correction
+    solar_time = (dt_utc.hour * 60 + dt_utc.minute + dt_utc.second / 60
+                  + lng_deg * 4 + eot)
+    hour_angle = (solar_time / 4) - 180  # degrees
+    # Solar elevation
+    lat_r = math.radians(lat_deg)
+    decl_r = math.radians(decl)
+    ha_r = math.radians(hour_angle)
+    sin_el = (math.sin(lat_r) * math.sin(decl_r)
+              + math.cos(lat_r) * math.cos(decl_r) * math.cos(ha_r))
+    return math.degrees(math.asin(max(-1.0, min(1.0, sin_el))))
+
+def is_daytime(t, lat: float, lng: float, horizon_deg: float = -6.0) -> bool:
+    """True if sun is above horizon_deg (civil twilight by default)."""
+    dt_utc = t.utc_datetime()
+    return sun_elevation_deg(dt_utc, lat, lng) > horizon_deg
 
 # --- 4. MAIN CALCULATION ---
 st.title("🛰️ Meteor-M Pass Predictor")
 
-ts = load.timescale()
-observer_sf = wgs84.latlon(LAT, LNG, elevation_m=ALT)  # Skyfield observer for almanac
 observer_topos = Topos(latitude_degrees=LAT, longitude_degrees=LNG, elevation_m=ALT)
 
 tles = fetch_tles(tuple(TARGET_SATS.keys()))
@@ -111,12 +136,8 @@ with st.spinner("Calculating passes..."):
             ):
                 t_rise, t_peak, t_set = times[i], times[i + 1], times[i + 2]
 
-                # --- Correct daytime check using Skyfield almanac ---
-                try:
-                    daytime = is_daytime_skyfield(ts, t_rise, observer_sf)
-                except Exception:
-                    # Fallback: treat as daytime if almanac fails
-                    daytime = True
+                # Pure-math daytime check — no ephemeris file needed
+                daytime = is_daytime(t_rise, LAT, LNG)
 
                 if show_night or daytime:
                     diff_rise = (sat - observer_topos).at(t_rise)
