@@ -41,17 +41,21 @@ DAYS = new_days
 ts = load.timescale(builtin=True)  # Never downloads anything
 
 @st.cache_data(ttl=3600)  # Re-read file at most once per hour
-def load_tles_from_file():
-    """Read TLEs from tles.json committed by GitHub Actions."""
+def load_tle_strings():
+    """Read raw TLE strings from tles.json — plain dicts, safely cacheable."""
     if not TLE_FILE.exists():
         return None, None
     with open(TLE_FILE) as f:
         data = json.load(f)
-    sats = []
-    for norad_id_str, info in data["satellites"].items():
-        sat = EarthSatellite(info["tle_line1"], info["tle_line2"], info["name"], ts)
-        sats.append(sat)
-    return sats, data["fetched_at"]
+    return list(data["satellites"].values()), data["fetched_at"]
+
+def load_tles_from_file():
+    """Build EarthSatellite objects from cached TLE strings."""
+    records, fetched_at = load_tle_strings()
+    if not records:
+        return None, None
+    sats = [EarthSatellite(r["tle_line1"], r["tle_line2"], r["name"], ts) for r in records]
+    return sats, fetched_at
 
 def get_compass_dir(azimuth: float) -> str:
     dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
