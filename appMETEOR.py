@@ -329,6 +329,7 @@ tles, fetched_at = load_tles_from_file()
 if not tles:
     st.error(
         "❌ `tles.json` not found. "
+        "Run `fetch_tles.py` locally once to generate it, then commit it to your repo."
     )
     st.stop()
 
@@ -427,23 +428,16 @@ if all_data:
     st.divider()
     st.subheader(f"All passes — next {DAYS} day(s)")
 
-    # Display table with detail buttons
-    header_cols = st.columns([2, 2, 1, 1.5, 2, 1.5, 1])
-    for col, label in zip(header_cols, ["Satellite", "Local Time", "Max El",
-                                         "Peak Dir", "Path", "Duration", "Detail"]):
-        col.markdown(f"**{label}**")
+    # Clean dataframe display
+    display_df = df.drop(columns=["RawTime"]).copy()
+    st.dataframe(display_df, hide_index=True, width="stretch")
 
-    st.divider()
-
+    # Detail buttons below the dataframe
+    st.markdown("**Select a pass for details:**")
+    btn_cols = st.columns(min(len(df), 6))
     for idx, row in df.iterrows():
-        cols = st.columns([2, 2, 1, 1.5, 2, 1.5, 1])
-        cols[0].write(row["Satellite"])
-        cols[1].write(row["Local Time"])
-        cols[2].write(row["Max El"])
-        cols[3].write(row["Peak Direction"])
-        cols[4].write(row["Path"])
-        cols[5].write(row["Duration"])
-        if cols[6].button("🔍", key=f"detail_{idx}"):
+        col = btn_cols[idx % len(btn_cols)]
+        if col.button(f"🔍 {row['Satellite'].replace('Meteor ', '')} {row['Local Time']}", key=f"detail_{idx}"):
             st.session_state["selected_pass"] = idx
 
     # --- 6. DETAIL VIEW ---
@@ -466,7 +460,7 @@ if all_data:
                 st.plotly_chart(make_sky_plot(timeline, sat.name),
                                 width="stretch", key="skyplot")
             with col_map:
-                st.markdown("**🗺️ Sattelite Path**")
+                st.markdown("**🗺️ Ground Track**")
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 width="stretch", key="groundtrack")
 
