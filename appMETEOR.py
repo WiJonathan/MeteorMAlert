@@ -13,8 +13,9 @@ st.set_page_config(page_title="Meteor-M TLE Predictor", page_icon="🛰️", lay
 
 TLE_FILE = Path(__file__).parent / "tles.json"
 
-# Meteor LRPT swath width ~2800 km
-SWATH_KM = 2800
+# Meteor LRPT scan half-angle and altitude used in swath calculation
+METEOR_SCAN_HALF_ANGLE = 55.4
+METEOR_ALT_KM = 820.0
 
 # --- 2. SIDEBAR ---
 with st.sidebar.form("location_form"):
@@ -92,14 +93,17 @@ def offset_latlon(lat, lon, bearing_deg, distance_km):
     return math.degrees(lat2), math.degrees(lon2)
 
 def compute_pass_timeline(sat, observer_topos, t_rise, t_set):
-    """Compute az/el/lat/lon at 30-second intervals through a pass."""
+    """Compute az/el/lat/lon at 30-second intervals through the full pass AOS to LOS."""
     duration_s = (t_set - t_rise) * 24 * 3600
     steps = max(2, int(duration_s / 30))
-    times = [t_rise + (i / steps) * (t_set - t_rise) for i in range(steps + 1)]
     rows = []
-    for t in times:
+    for i in range(steps + 1):
+        frac = i / steps
+        t = t_rise + frac * (t_set - t_rise)
         diff = (sat - observer_topos).at(t)
         el, az, _ = diff.altaz()
+        if el.degrees < 0:
+            continue  # skip below-horizon samples at edges
         geo = wgs84.subpoint_of(sat.at(t))
         rows.append({
             "t": t,
@@ -112,95 +116,143 @@ def compute_pass_timeline(sat, observer_topos, t_rise, t_set):
     return rows
 
 def make_sky_plot(timeline, sat_name):
-    """Polar sky plot — azimuth around, elevation from edge (0°) to center (90°)."""
-    els = [90 - r["el"] for r in timeline]  # invert so 90° is center
-    azs = [r["az"] for r in timeline]
-    labels = [r["label"] for r in timeline]
+    """
+    Observer's sky view: N at top, E at right (as if lying on your back looking up).
+    Elevation rings: 0° at edge, 90° at centre.
+    Uses Cartesian x/y so we control the projection exactly.
+    """
+    def azel_to_xy(az_deg, el_deg):
+        """Convert az/el to x,y with N up, E right, horizon at r=1."""
+        r = 1.0 - (el_deg / 90.0)  # 0 at zenith, 1 at horizon
+        az_r = math.radians(az_deg)
+        x = r * math.sin(az_r)   # E is +x
+        y = r * math.cos(az_r)   # N is +y
+        return x, y
 
-    # Mark minute ticks
-    minute_els, minute_azs, minute_labels = [], [], []
+    xs, ys, labels = [], [], []
+    for r in timeline:
+        x, y = azel_to_xy(r["az"], r["el"])
+        xs.append(x); ys.append(y); labels.append(r["label"])
+
+    # Minute markers
+    min_xs, min_ys, min_labels = [], [], []
     last_min = None
     for r in timeline:
         dt = r["t"].astimezone(LOCAL_TZ)
-        if dt.second < 30 and last_min != dt.minute:
-            minute_els.append(90 - r["el"])
-            minute_azs.append(r["az"])
-            minute_labels.append(r["label"])
+        if dt.second < 15 and last_min != dt.minute:
+            x, y = azel_to_xy(r["az"], r["el"])
+            min_xs.append(x); min_ys.append(y)
+            min_labels.append(r["label"])
             last_min = dt.minute
+
+    peak_idx = max(range(len(timeline)), key=lambda i: timeline[i]["el"])
+    px, py = azel_to_xy(timeline[peak_idx]["az"], timeline[peak_idx]["el"])
 
     fig = go.Figure()
 
+    # Elevation rings
+    for el_ring, label in [(0, "0°"), (30, "30°"), (60, "60°"), (90, "90°")]:
+        r = 1.0 - el_ring / 90.0
+        angles = [i * math.pi / 180 for i in range(361)]
+        fig.add_trace(go.Scatter(
+            x=[r * math.sin(a) for a in angles],
+            y=[r * math.cos(a) for a in angles],
+            mode="lines", line=dict(color="rgba(255,255,255,0.15)", width=1),
+            hoverinfo="skip", showlegend=False
+        ))
+        if el_ring < 90:
+            fig.add_annotation(x=0, y=-r, text=label,
+                               font=dict(color="rgba(255,255,255,0.5)", size=9),
+                               showarrow=False, yshift=-8)
+
+    # Cardinal direction lines & labels
+    for az_deg, label in [(0,"N"),(90,"E"),(180,"S"),(270,"W")]:
+        az_r = math.radians(az_deg)
+        fig.add_trace(go.Scatter(
+            x=[0, math.sin(az_r)], y=[0, math.cos(az_r)],
+            mode="lines", line=dict(color="rgba(255,255,255,0.2)", width=1),
+            hoverinfo="skip", showlegend=False
+        ))
+        fig.add_annotation(x=1.08 * math.sin(az_r), y=1.08 * math.cos(az_r),
+                           text=f"<b>{label}</b>",
+                           font=dict(color="white", size=13),
+                           showarrow=False)
+
     # Pass arc
-    fig.add_trace(go.Scatterpolar(
-        r=els, theta=azs, mode="lines",
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="lines",
         line=dict(color="#00aaff", width=3),
-        name=sat_name, hovertext=labels, hoverinfo="text"
+        hovertext=labels, hoverinfo="text", showlegend=False
     ))
 
-    # Rise marker
-    fig.add_trace(go.Scatterpolar(
-        r=[els[0]], theta=[azs[0]], mode="markers+text",
-        marker=dict(color="lime", size=12, symbol="circle"),
+    # AOS
+    fig.add_trace(go.Scatter(
+        x=[xs[0]], y=[ys[0]], mode="markers+text",
+        marker=dict(color="lime", size=12),
         text=["AOS"], textposition="top center",
-        name="AOS", hoverinfo="skip"
+        hoverinfo="skip", showlegend=False
     ))
 
-    # Set marker
-    fig.add_trace(go.Scatterpolar(
-        r=[els[-1]], theta=[azs[-1]], mode="markers+text",
-        marker=dict(color="red", size=12, symbol="circle"),
+    # LOS
+    fig.add_trace(go.Scatter(
+        x=[xs[-1]], y=[ys[-1]], mode="markers+text",
+        marker=dict(color="red", size=12),
         text=["LOS"], textposition="top center",
-        name="LOS", hoverinfo="skip"
+        hoverinfo="skip", showlegend=False
     ))
 
-    # Minute markers
-    fig.add_trace(go.Scatterpolar(
-        r=minute_els, theta=minute_azs, mode="markers+text",
-        marker=dict(color="yellow", size=8, symbol="circle"),
-        text=minute_labels, textposition="top right",
-        textfont=dict(size=9), name="Minutes", hoverinfo="skip"
-    ))
-
-    # Peak marker
-    peak_idx = min(range(len(els)), key=lambda i: els[i])
-    fig.add_trace(go.Scatterpolar(
-        r=[els[peak_idx]], theta=[azs[peak_idx]], mode="markers+text",
+    # Peak
+    fig.add_trace(go.Scatter(
+        x=[px], y=[py], mode="markers+text",
         marker=dict(color="orange", size=14, symbol="star"),
         text=[f"MAX {int(timeline[peak_idx]['el'])}°"],
         textposition="top center",
-        name="Peak", hoverinfo="skip"
+        hoverinfo="skip", showlegend=False
+    ))
+
+    # Minute markers
+    fig.add_trace(go.Scatter(
+        x=min_xs, y=min_ys, mode="markers+text",
+        marker=dict(color="yellow", size=7),
+        text=min_labels, textposition="top right",
+        textfont=dict(size=9), hoverinfo="skip", showlegend=False
     ))
 
     fig.update_layout(
-        polar=dict(
-            angularaxis=dict(direction="clockwise", rotation=90,
-                             tickvals=[0,45,90,135,180,225,270,315],
-                             ticktext=["N","NE","E","SE","S","SW","W","NW"]),
-            radialaxis=dict(range=[90, 0], tickvals=[0,30,60,90],
-                            ticktext=["90°","60°","30°","0°"],
-                            showgrid=True, gridcolor="rgba(255,255,255,0.2)"),
-            bgcolor="rgba(0,10,30,0.95)",
-        ),
+        xaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="y"),
+        yaxis=dict(range=[-1.2, 1.2], visible=False),
+        plot_bgcolor="rgb(0,10,30)",
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        showlegend=False,
-        margin=dict(l=40, r=40, t=40, b=40),
+        margin=dict(l=20, r=20, t=20, b=20),
         height=420,
     )
     return fig
 
+def swath_edge(sat_lat, sat_lon, sat_alt_km, bearing_deg, scan_angle_deg):
+    """
+    Compute swath edge lat/lon using proper Earth geometry.
+    scan_angle_deg: half-angle from nadir (±55.4° for Meteor LRPT).
+    """
+    R = 6371.0
+    # Earth central angle from satellite nadir to swath edge
+    rho = math.asin((R / (R + sat_alt_km)) * math.sin(math.radians(scan_angle_deg)))
+    # Ground distance in km
+    ground_dist_km = R * (math.radians(scan_angle_deg) - rho)
+    return offset_latlon(sat_lat, sat_lon, bearing_deg, ground_dist_km)
+
 def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
-    """Ground track map over Europe with swath width and minute markers."""
+    """Ground track map over Europe with correct geometric swath and minute markers."""
     lats = [r["lat"] for r in timeline]
     lons = [r["lon"] for r in timeline]
     labels = [r["label"] for r in timeline]
 
-    # Build swath edge lines
-    half_swath = SWATH_KM / 2
-    left_lats, left_lons, right_lats, right_lons = [], [], [], []
+    # Meteor LRPT scan half-angle
+    SCAN_HALF_ANGLE = 55.4
+    # Approximate Meteor altitude
+    SAT_ALT_KM = 820.0
 
+    left_lats, left_lons, right_lats, right_lons = [], [], [], []
     for i in range(len(timeline)):
-        # Flight direction from adjacent points
         if i < len(timeline) - 1:
             dlat = timeline[i+1]["lat"] - timeline[i]["lat"]
             dlon = timeline[i+1]["lon"] - timeline[i]["lon"]
@@ -208,8 +260,8 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
             dlat = timeline[i]["lat"] - timeline[i-1]["lat"]
             dlon = timeline[i]["lon"] - timeline[i-1]["lon"]
         bearing = math.degrees(math.atan2(dlon, dlat)) % 360
-        ll = offset_latlon(lats[i], lons[i], (bearing - 90) % 360, half_swath)
-        rl = offset_latlon(lats[i], lons[i], (bearing + 90) % 360, half_swath)
+        ll = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing - 90) % 360, SCAN_HALF_ANGLE)
+        rl = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing + 90) % 360, SCAN_HALF_ANGLE)
         left_lats.append(ll[0]); left_lons.append(ll[1])
         right_lats.append(rl[0]); right_lons.append(rl[1])
 
@@ -218,7 +270,7 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     last_min = None
     for r in timeline:
         dt = r["t"].astimezone(LOCAL_TZ)
-        if dt.second < 30 and last_min != dt.minute:
+        if dt.second < 15 and last_min != dt.minute:
             min_lats.append(r["lat"]); min_lons.append(r["lon"])
             min_labels.append(r["label"])
             last_min = dt.minute
@@ -231,11 +283,23 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     fig.add_trace(go.Scattergeo(
         lat=swath_lats, lon=swath_lons, mode="lines",
         fill="toself", fillcolor="rgba(0,170,255,0.15)",
-        line=dict(color="rgba(0,170,255,0.4)", width=1),
+        line=dict(color="rgba(0,170,255,0.5)", width=1),
         name="Swath", hoverinfo="skip"
     ))
 
-    # Ground track line
+    # Swath edges separately for clarity
+    fig.add_trace(go.Scattergeo(
+        lat=left_lats, lon=left_lons, mode="lines",
+        line=dict(color="rgba(0,170,255,0.6)", width=1, dash="dot"),
+        hoverinfo="skip", showlegend=False
+    ))
+    fig.add_trace(go.Scattergeo(
+        lat=right_lats, lon=right_lons, mode="lines",
+        line=dict(color="rgba(0,170,255,0.6)", width=1, dash="dot"),
+        hoverinfo="skip", showlegend=False
+    ))
+
+    # Ground track
     fig.add_trace(go.Scattergeo(
         lat=lats, lon=lons, mode="lines",
         line=dict(color="#00aaff", width=2.5),
@@ -257,16 +321,16 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         mode="markers+text",
         marker=dict(color=["lime", "red"], size=12),
         text=["AOS", "LOS"], textposition="top center",
-        textfont=dict(color="white"), name="AOS/LOS", hoverinfo="skip"
+        textfont=dict(color="white"), hoverinfo="skip"
     ))
 
-    # Observer location
+    # Observer
     fig.add_trace(go.Scattergeo(
         lat=[observer_lat], lon=[observer_lon],
         mode="markers+text",
         marker=dict(color="orange", size=10, symbol="star"),
         text=["You"], textposition="top right",
-        textfont=dict(color="orange"), name="Observer", hoverinfo="skip"
+        textfont=dict(color="orange"), hoverinfo="skip"
     ))
 
     fig.update_geos(
@@ -278,7 +342,6 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         showcountries=True, countrycolor="rgba(255,255,255,0.3)",
         bgcolor="rgba(0,0,0,0)",
     )
-
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=0, r=0, t=0, b=0),
