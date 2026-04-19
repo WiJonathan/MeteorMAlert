@@ -454,7 +454,7 @@ if all_data:
 
     st.divider()
     st.subheader(f"All passes — next {DAYS} day(s)")
-    st.caption("Click a row to see the sky plot and ground track.")
+    st.caption("Check the box to see the sky plot and satellite path.")
 
     display_df = df.drop(columns=["RawTime"]).copy()
     selection = st.dataframe(
@@ -488,7 +488,7 @@ if all_data:
                 st.markdown("**🌐 Sky Plot**")
                 st.plotly_chart(make_sky_plot(timeline, sat.name),
                                 use_container_width=True, key="skyplot")
-                st.markdown("**🗺️ Ground Track**")
+                st.markdown("**🗺️ Satellite Path**")
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 use_container_width=True, key="groundtrack")
 
