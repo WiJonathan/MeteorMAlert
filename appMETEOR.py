@@ -132,18 +132,15 @@ def make_sky_plot(timeline, sat_name):
         x, y = azel_to_xy(r["az"], r["el"])
         xs.append(x); ys.append(y); labels.append(r["label"])
 
-    # Minute markers — skip above 60° elevation (spreads ugly near zenith)
-    min_xs, min_ys, min_labels, min_positions = [], [], [], []
+    # Minute markers
+    min_xs, min_ys, min_labels = [], [], []
     last_min = None
-    toggle = 0
     for r in timeline:
         dt = r["t"].astimezone(LOCAL_TZ)
-        if dt.second < 30 and last_min != dt.minute and r["el"] < 60:
+        if dt.second < 30 and last_min != dt.minute:
             x, y = azel_to_xy(r["az"], r["el"])
             min_xs.append(x); min_ys.append(y)
             min_labels.append(r["label"])
-            min_positions.append("top right" if toggle % 2 == 0 else "top left")
-            toggle += 1
             last_min = dt.minute
 
     peak_idx = max(range(len(timeline)), key=lambda i: timeline[i]["el"])
@@ -212,13 +209,12 @@ def make_sky_plot(timeline, sat_name):
     ))
 
     # Minute markers
-    for i in range(len(min_xs)):
-        fig.add_trace(go.Scatter(
-            x=[min_xs[i]], y=[min_ys[i]], mode="markers+text",
-            marker=dict(color="yellow", size=7),
-            text=[min_labels[i]], textposition=min_positions[i],
-            textfont=dict(size=9), hoverinfo="skip", showlegend=False
-        ))
+    fig.add_trace(go.Scatter(
+        x=min_xs, y=min_ys, mode="markers+text",
+        marker=dict(color="yellow", size=7),
+        text=min_labels, textposition="top right",
+        textfont=dict(size=9), hoverinfo="skip", showlegend=False
+    ))
 
     fig.update_layout(
         xaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="y"),
@@ -471,13 +467,12 @@ if all_data:
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 width="stretch", key="groundtrack")
 
-            # Minute-by-minute table — strictly every 60s from AOS, no wall-clock alignment
+            # Minute-by-minute table — sample every 60s from AOS, no gaps
             st.markdown("**⏱️ Minute-by-minute tracking**")
             duration_s = (t_set - t_rise) * 24 * 3600
             table_rows = []
-            sec = 0
-            while sec <= duration_s:
-                frac = sec / duration_s
+            for sec in range(0, int(duration_s) + 60, 60):
+                frac = min(sec / duration_s, 1.0)
                 t_sample = t_rise + frac * (t_set - t_rise)
                 diff = (sat - observer_topos).at(t_sample)
                 el, az, _ = diff.altaz()
@@ -487,7 +482,6 @@ if all_data:
                     "Azimuth":   f"{az.degrees:.1f}°",
                     "Direction": get_compass_dir(az.degrees),
                 })
-                sec += 60
 
             st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
 
