@@ -250,14 +250,17 @@ def make_sky_plot(timeline, sat_name):
 
 def swath_edge(sat_lat, sat_lon, sat_alt_km, bearing_deg, scan_angle_deg):
     """
-    Compute swath edge lat/lon using proper Earth geometry.
+    Compute swath edge lat/lon using correct Earth geometry.
     scan_angle_deg: half-angle from nadir (±55.4° for Meteor LRPT).
+    At 820km altitude and ±55.4° scan angle this gives ~1400km per side = 2800km total.
     """
     R = 6371.0
-    # Earth central angle from satellite nadir to swath edge
-    rho = math.asin((R / (R + sat_alt_km)) * math.sin(math.radians(scan_angle_deg)))
-    # Ground distance in km
-    ground_dist_km = R * (math.radians(scan_angle_deg) - rho)
+    eta = math.radians(scan_angle_deg)  # nadir angle
+    # Earth central angle using sine rule: sin(rho)/sin(eta) = (R+h)/R
+    sin_rho = (R + sat_alt_km) / R * math.sin(eta)
+    sin_rho = min(1.0, sin_rho)  # clamp for safety
+    rho = math.asin(sin_rho)  # Earth central angle in radians
+    ground_dist_km = R * rho
     return offset_latlon(sat_lat, sat_lon, bearing_deg, ground_dist_km)
 
 def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
