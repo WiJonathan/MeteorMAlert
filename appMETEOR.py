@@ -12,9 +12,8 @@ st.set_page_config(page_title="Meteor-M TLE Predictor", page_icon="🛰️", lay
 
 TLE_FILE = Path(__file__).parent / "tles.json"
 
-# Meteor LRPT scan half-angle and altitude used in swath calculation
-METEOR_SCAN_HALF_ANGLE = 55.4
-METEOR_ALT_KM = 820.0
+# Meteor LRPT half-swath distance
+METEOR_HALF_SWATH_KM = 1400.0
 
 # --- 2. SIDEBAR ---
 with st.sidebar.form("location_form"):
@@ -248,20 +247,14 @@ def make_sky_plot(timeline, sat_name):
     )
     return fig
 
-def swath_edge(sat_lat, sat_lon, sat_alt_km, bearing_deg, scan_angle_deg):
+def swath_edge(sat_lat, sat_lon, bearing_deg):
     """
-    Compute swath edge lat/lon using correct Earth geometry.
-    scan_angle_deg: half-angle from nadir (±55.4° for Meteor LRPT).
-    At 820km altitude and ±55.4° scan angle this gives ~1400km per side = 2800km total.
+    Compute swath edge lat/lon for Meteor LRPT.
+    Meteor MSU-MR swath = 2800km total, 1400km per side.
+    Uses direct great-circle offset — no scan angle approximation needed.
     """
-    R = 6371.0
-    eta = math.radians(scan_angle_deg)  # nadir angle
-    # Earth central angle using sine rule: sin(rho)/sin(eta) = (R+h)/R
-    sin_rho = (R + sat_alt_km) / R * math.sin(eta)
-    sin_rho = min(1.0, sin_rho)  # clamp for safety
-    rho = math.asin(sin_rho)  # Earth central angle in radians
-    ground_dist_km = R * rho
-    return offset_latlon(sat_lat, sat_lon, bearing_deg, ground_dist_km)
+    HALF_SWATH_KM = 1400.0
+    return offset_latlon(sat_lat, sat_lon, bearing_deg, HALF_SWATH_KM)
 
 def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     """Ground track map with correct swath overlay and minute markers."""
@@ -270,15 +263,13 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     labels = [r["label"] for r in timeline]
 
     # --- Swath edges using proper Earth geometry ---
-    SCAN_HALF_ANGLE = 55.4
-    SAT_ALT_KM = 820.0
     left_lats, left_lons = [], []
     right_lats, right_lons = [], []
 
     for i in range(len(timeline)):
         bearing = timeline[i]["bearing"]
-        ll = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing - 90) % 360, SCAN_HALF_ANGLE)
-        rl = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing + 90) % 360, SCAN_HALF_ANGLE)
+        ll = swath_edge(lats[i], lons[i], (bearing - 90) % 360)
+        rl = swath_edge(lats[i], lons[i], (bearing + 90) % 360)
         left_lats.append(ll[0]);  left_lons.append(ll[1])
         right_lats.append(rl[0]); right_lons.append(rl[1])
 
