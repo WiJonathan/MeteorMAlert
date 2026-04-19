@@ -226,7 +226,7 @@ def make_sky_plot(timeline, sat_name):
         plot_bgcolor="rgb(0,10,30)",
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=20, b=20),
-        height=350,
+        height=420,
     )
     return fig
 
@@ -483,15 +483,12 @@ if all_data:
 
             timeline = compute_pass_timeline(sat, observer_topos, t_rise, t_set)
 
-            col_sky, col_map = st.columns(2)
-            with col_sky:
-                st.markdown("**🌐 Sky Plot**")
-                st.plotly_chart(make_sky_plot(timeline, sat.name),
-                                use_container_width=True, key="skyplot")
-            with col_map:
-                st.markdown("**🗺️ Ground Track**")
-                st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
-                                use_container_width=True, key="groundtrack")
+            st.markdown("**🌐 Sky Plot**")
+            st.plotly_chart(make_sky_plot(timeline, sat.name),
+                            use_container_width=True, key="skyplot")
+            st.markdown("**🗺️ Ground Track**")
+            st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
+                            use_container_width=True, key="groundtrack")
 
             # Minute-by-minute table — strictly every 60s from AOS, no wall-clock alignment
             st.markdown("**⏱️ Minute-by-minute tracking**")
