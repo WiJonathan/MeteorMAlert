@@ -290,8 +290,14 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         textfont=dict(color="orange"), hoverinfo="skip"
     ))
 
+    # Auto-fit map bounds to the pass + padding
+    pad = 10
+    lat_min = max(-80, min(lats + [observer_lat]) - pad)
+    lat_max = min(85,  max(lats + [observer_lat]) + pad)
+    lon_min = min(lons + [observer_lon]) - pad
+    lon_max = max(lons + [observer_lon]) + pad
+
     fig.update_geos(
-        scope="europe",
         projection_type="natural earth",
         showland=True, landcolor="rgb(40,60,40)",
         showocean=True, oceancolor="rgb(10,20,50)",
@@ -305,8 +311,8 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         showlegend=False,
         height=420,
         geo=dict(
-            lataxis=dict(range=[20, 80]),
-            lonaxis=dict(range=[-30, 50]),
+            lataxis=dict(range=[lat_min, lat_max]),
+            lonaxis=dict(range=[lon_min, lon_max]),
         )
     )
     return fig
@@ -461,20 +467,21 @@ if all_data:
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 width="stretch", key="groundtrack")
 
-            # Minute-by-minute table
+            # Minute-by-minute table — sample every 60s from AOS, no gaps
             st.markdown("**⏱️ Minute-by-minute tracking**")
+            duration_s = (t_set - t_rise) * 24 * 3600
             table_rows = []
-            last_min = None
-            for r in timeline:
-                dt = r["t"].astimezone(LOCAL_TZ)
-                if dt.second < 30 and last_min != dt.minute:
-                    table_rows.append({
-                        "Time":      r["label"],
-                        "Elevation": f"{r['el']:.1f}°",
-                        "Azimuth":   f"{r['az']:.1f}°",
-                        "Direction": get_compass_dir(r["az"]),
-                    })
-                    last_min = dt.minute
+            for sec in range(0, int(duration_s) + 60, 60):
+                frac = min(sec / duration_s, 1.0)
+                t_sample = t_rise + frac * (t_set - t_rise)
+                diff = (sat - observer_topos).at(t_sample)
+                el, az, _ = diff.altaz()
+                table_rows.append({
+                    "Time":      t_sample.astimezone(LOCAL_TZ).strftime("%H:%M:%S"),
+                    "Elevation": f"{max(0.0, el.degrees):.1f}°",
+                    "Azimuth":   f"{az.degrees:.1f}°",
+                    "Direction": get_compass_dir(az.degrees),
+                })
 
             st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
 
