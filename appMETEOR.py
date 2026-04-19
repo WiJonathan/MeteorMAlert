@@ -1,4 +1,3 @@
-
 import streamlit as st
 import datetime
 import json
@@ -7,33 +6,33 @@ import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
 from skyfield.api import Topos, load, EarthSatellite, wgs84
- 
+
 # --- 1. SETTINGS ---
 st.set_page_config(page_title="Meteor-M TLE Predictor", page_icon="🛰️", layout="wide")
- 
+
 TLE_FILE = Path(__file__).parent / "tles.json"
- 
+
 # Meteor LRPT scan half-angle and altitude used in swath calculation
 METEOR_SCAN_HALF_ANGLE = 55.4
 METEOR_ALT_KM = 820.0
- 
+
 # --- 2. SIDEBAR ---
 with st.sidebar.form("location_form"):
     st.header("📍 Location & Settings")
     new_lat = st.number_input("Latitude", value=52.10, format="%.4f")
     new_lng = st.number_input("Longitude", value=6.45, format="%.4f")
     new_alt = st.number_input("Altitude (m)", value=18)
- 
+
     tz_options = [f"UTC{'+' if h >= 0 else ''}{h}" for h in range(-12, 15)]
     default_tz_idx = tz_options.index("UTC+2") if "UTC+2" in tz_options else 0
     new_tz = st.selectbox("Timezone", tz_options, index=default_tz_idx)
- 
+
     new_el = st.slider("Min Elevation (°)", 0, 90, 10)
     new_days = st.slider("Prediction Window (Days)", 1, 10, 5)
     show_night = st.checkbox("Show Night passes", value=False)
- 
+
     submitted = st.form_submit_button("Apply")
- 
+
 LAT = new_lat
 LNG = new_lng
 ALT = new_alt
@@ -41,11 +40,11 @@ tz_offset = int(new_tz.replace("UTC", "").replace("+", "") or "0")
 LOCAL_TZ = datetime.timezone(datetime.timedelta(hours=tz_offset))
 MIN_EL = new_el
 DAYS = new_days
- 
+
 # --- 3. HELPER FUNCTIONS ---
- 
+
 ts = load.timescale(builtin=True)
- 
+
 @st.cache_data(ttl=3600)
 def load_tle_strings():
     if not TLE_FILE.exists():
@@ -53,19 +52,19 @@ def load_tle_strings():
     with open(TLE_FILE) as f:
         data = json.load(f)
     return list(data["satellites"].values()), data["fetched_at"]
- 
+
 def load_tles_from_file():
     records, fetched_at = load_tle_strings()
     if not records:
         return None, None
     sats = [EarthSatellite(r["tle_line1"], r["tle_line2"], r["name"], ts) for r in records]
     return sats, fetched_at
- 
+
 def get_compass_dir(azimuth: float) -> str:
     dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
             "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
     return dirs[int((azimuth + 11.25) / 22.5) % 16]
- 
+
 def sun_elevation_deg(dt_utc, lat_deg, lng_deg):
     n = dt_utc.timetuple().tm_yday
     decl = 23.45 * math.sin(math.radians((360 / 365) * (n - 81)))
@@ -76,10 +75,10 @@ def sun_elevation_deg(dt_utc, lat_deg, lng_deg):
     lat_r, decl_r, ha_r = math.radians(lat_deg), math.radians(decl), math.radians(hour_angle)
     sin_el = math.sin(lat_r) * math.sin(decl_r) + math.cos(lat_r) * math.cos(decl_r) * math.cos(ha_r)
     return math.degrees(math.asin(max(-1.0, min(1.0, sin_el))))
- 
+
 def is_daytime(t, lat, lng, horizon_deg=-6.0):
     return sun_elevation_deg(t.utc_datetime(), lat, lng) > horizon_deg
- 
+
 def offset_latlon(lat, lon, bearing_deg, distance_km):
     """Offset a lat/lon by distance_km in bearing_deg direction."""
     R = 6371.0
@@ -92,7 +91,7 @@ def offset_latlon(lat, lon, bearing_deg, distance_km):
     lon2 = lon_r + math.atan2(math.sin(b_r) * math.sin(d) * math.cos(lat_r),
                                math.cos(d) - math.sin(lat_r) * math.sin(lat2))
     return math.degrees(lat2), math.degrees(lon2)
- 
+
 def compute_pass_timeline(sat, observer_topos, t_rise, t_set):
     """Compute az/el/lat/lon at 30-second intervals through the full pass AOS to LOS."""
     duration_s = (t_set - t_rise) * 24 * 3600
@@ -113,7 +112,7 @@ def compute_pass_timeline(sat, observer_topos, t_rise, t_set):
             "label": t.astimezone(LOCAL_TZ).strftime("%H:%M:%S"),
         })
     return rows
- 
+
 def make_sky_plot(timeline, sat_name):
     """
     Observer's sky view: N at top, E at right (as if lying on your back looking up).
@@ -127,12 +126,12 @@ def make_sky_plot(timeline, sat_name):
         x = r * math.sin(az_r)   # E is +x
         y = r * math.cos(az_r)   # N is +y
         return x, y
- 
+
     xs, ys, labels = [], [], []
     for r in timeline:
         x, y = azel_to_xy(r["az"], r["el"])
         xs.append(x); ys.append(y); labels.append(r["label"])
- 
+
     # Minute markers — skip above 60° elevation (spreads ugly near zenith)
     min_xs, min_ys, min_labels, min_positions = [], [], [], []
     last_min = None
@@ -146,12 +145,12 @@ def make_sky_plot(timeline, sat_name):
             min_positions.append("top right" if toggle % 2 == 0 else "top left")
             toggle += 1
             last_min = dt.minute
- 
+
     peak_idx = max(range(len(timeline)), key=lambda i: timeline[i]["el"])
     px, py = azel_to_xy(timeline[peak_idx]["az"], timeline[peak_idx]["el"])
- 
+
     fig = go.Figure()
- 
+
     # Elevation rings
     for el_ring, label in [(0, "0°"), (30, "30°"), (60, "60°"), (90, "90°")]:
         r = 1.0 - el_ring / 90.0
@@ -166,7 +165,7 @@ def make_sky_plot(timeline, sat_name):
             fig.add_annotation(x=0, y=-r, text=label,
                                font=dict(color="rgba(255,255,255,0.5)", size=9),
                                showarrow=False, yshift=-8)
- 
+
     # Cardinal direction lines & labels
     for az_deg, label in [(0,"N"),(90,"E"),(180,"S"),(270,"W")]:
         az_r = math.radians(az_deg)
@@ -179,14 +178,14 @@ def make_sky_plot(timeline, sat_name):
                            text=f"<b>{label}</b>",
                            font=dict(color="white", size=13),
                            showarrow=False)
- 
+
     # Pass arc
     fig.add_trace(go.Scatter(
         x=xs, y=ys, mode="lines",
         line=dict(color="#00aaff", width=3),
         hovertext=labels, hoverinfo="text", showlegend=False
     ))
- 
+
     # AOS
     fig.add_trace(go.Scatter(
         x=[xs[0]], y=[ys[0]], mode="markers+text",
@@ -194,7 +193,7 @@ def make_sky_plot(timeline, sat_name):
         text=["AOS"], textposition="top center",
         hoverinfo="skip", showlegend=False
     ))
- 
+
     # LOS
     fig.add_trace(go.Scatter(
         x=[xs[-1]], y=[ys[-1]], mode="markers+text",
@@ -202,7 +201,7 @@ def make_sky_plot(timeline, sat_name):
         text=["LOS"], textposition="top center",
         hoverinfo="skip", showlegend=False
     ))
- 
+
     # Peak
     fig.add_trace(go.Scatter(
         x=[px], y=[py], mode="markers+text",
@@ -211,7 +210,7 @@ def make_sky_plot(timeline, sat_name):
         textposition="top center",
         hoverinfo="skip", showlegend=False
     ))
- 
+
     # Minute markers
     for i in range(len(min_xs)):
         fig.add_trace(go.Scatter(
@@ -220,7 +219,7 @@ def make_sky_plot(timeline, sat_name):
             text=[min_labels[i]], textposition=min_positions[i],
             textfont=dict(size=9), hoverinfo="skip", showlegend=False
         ))
- 
+
     fig.update_layout(
         xaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="y"),
         yaxis=dict(range=[-1.2, 1.2], visible=False),
@@ -230,7 +229,7 @@ def make_sky_plot(timeline, sat_name):
         height=420,
     )
     return fig
- 
+
 def swath_edge(sat_lat, sat_lon, sat_alt_km, bearing_deg, scan_angle_deg):
     """
     Compute swath edge lat/lon using proper Earth geometry.
@@ -242,19 +241,19 @@ def swath_edge(sat_lat, sat_lon, sat_alt_km, bearing_deg, scan_angle_deg):
     # Ground distance in km
     ground_dist_km = R * (math.radians(scan_angle_deg) - rho)
     return offset_latlon(sat_lat, sat_lon, bearing_deg, ground_dist_km)
- 
+
 def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     """Ground track map with correct swath overlay and minute markers."""
     lats = [r["lat"] for r in timeline]
     lons = [r["lon"] for r in timeline]
     labels = [r["label"] for r in timeline]
- 
+
     # --- Swath edges using proper Earth geometry ---
     SCAN_HALF_ANGLE = 55.4
     SAT_ALT_KM = 820.0
     left_lats, left_lons = [], []
     right_lats, right_lons = [], []
- 
+
     for i in range(len(timeline)):
         # Flight bearing from adjacent points
         if i < len(timeline) - 1:
@@ -264,46 +263,16 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
             dlat = timeline[i]["lat"] - timeline[i-1]["lat"]
             dlon = timeline[i]["lon"] - timeline[i-1]["lon"]
         bearing = math.degrees(math.atan2(dlon, dlat)) % 360
- 
+
         ll = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing - 90) % 360, SCAN_HALF_ANGLE)
         rl = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing + 90) % 360, SCAN_HALF_ANGLE)
         left_lats.append(ll[0]);  left_lons.append(ll[1])
         right_lats.append(rl[0]); right_lons.append(rl[1])
- 
+
     # Polygon: left edge forward + right edge reversed = closed wedge
-    # Use great circle interpolation to avoid projection jaggedness
-    def gc_interpolate(lats, lons, steps=5):
-        """Interpolate between points along great circles."""
-        out_lats, out_lons = [], []
-        for i in range(len(lats) - 1):
-            lat1, lon1 = math.radians(lats[i]), math.radians(lons[i])
-            lat2, lon2 = math.radians(lats[i+1]), math.radians(lons[i+1])
-            for j in range(steps):
-                f = j / steps
-                # Slerp between two points on sphere
-                d = 2 * math.asin(math.sqrt(
-                    math.sin((lat2-lat1)/2)**2 +
-                    math.cos(lat1)*math.cos(lat2)*math.sin((lon2-lon1)/2)**2
-                ))
-                if d < 1e-10:
-                    out_lats.append(lats[i]); out_lons.append(lons[i])
-                    continue
-                A = math.sin((1-f)*d)/math.sin(d)
-                B = math.sin(f*d)/math.sin(d)
-                x = A*math.cos(lat1)*math.cos(lon1) + B*math.cos(lat2)*math.cos(lon2)
-                y = A*math.cos(lat1)*math.sin(lon1) + B*math.cos(lat2)*math.sin(lon2)
-                z = A*math.sin(lat1) + B*math.sin(lat2)
-                out_lats.append(math.degrees(math.atan2(z, math.sqrt(x**2+y**2))))
-                out_lons.append(math.degrees(math.atan2(y, x)))
-        out_lats.append(lats[-1]); out_lons.append(lons[-1])
-        return out_lats, out_lons
- 
-    il_lats, il_lons = gc_interpolate(left_lats, left_lons)
-    ir_lats, ir_lons = gc_interpolate(right_lats, right_lons)
- 
-    poly_lats = il_lats + list(reversed(ir_lats)) + [il_lats[0]]
-    poly_lons = il_lons + list(reversed(ir_lons)) + [il_lons[0]]
- 
+    poly_lats = left_lats + list(reversed(right_lats)) + [left_lats[0]]
+    poly_lons = left_lons + list(reversed(right_lons)) + [left_lons[0]]
+
     # Minute markers
     min_lats, min_lons, min_labels = [], [], []
     last_min = None
@@ -313,9 +282,9 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
             min_lats.append(r["lat"]); min_lons.append(r["lon"])
             min_labels.append(r["label"])
             last_min = dt.minute
- 
+
     fig = go.Figure()
- 
+
     # Swath fill
     fig.add_trace(go.Scattergeo(
         lat=poly_lats, lon=poly_lons, mode="lines",
@@ -323,14 +292,14 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         line=dict(color="rgba(0,170,255,0.5)", width=1),
         hoverinfo="skip", showlegend=False
     ))
- 
+
     # Ground track
     fig.add_trace(go.Scattergeo(
         lat=lats, lon=lons, mode="lines",
         line=dict(color="#00aaff", width=2.5),
         name=sat_name, hovertext=labels, hoverinfo="text"
     ))
- 
+
     # Minute markers
     fig.add_trace(go.Scattergeo(
         lat=min_lats, lon=min_lons, mode="markers+text",
@@ -339,7 +308,7 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         textfont=dict(size=9, color="yellow"),
         name="Minutes", hoverinfo="skip"
     ))
- 
+
     # AOS / LOS
     fig.add_trace(go.Scattergeo(
         lat=[lats[0], lats[-1]], lon=[lons[0], lons[-1]],
@@ -348,7 +317,7 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         text=["AOS", "LOS"], textposition="top center",
         textfont=dict(color="white"), hoverinfo="skip"
     ))
- 
+
     # Observer
     fig.add_trace(go.Scattergeo(
         lat=[observer_lat], lon=[observer_lon],
@@ -357,7 +326,7 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         text=["You"], textposition="top right",
         textfont=dict(color="orange"), hoverinfo="skip"
     ))
- 
+
     # Auto-fit map bounds to pass + swath edges + observer + padding
     pad = 5
     all_lats = lats + left_lats + right_lats + [observer_lat]
@@ -366,9 +335,9 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     lat_max = min(85,  max(all_lats) + pad)
     lon_min = min(all_lons) - pad
     lon_max = max(all_lons) + pad
- 
+
     fig.update_geos(
-        projection_type="natural earth",
+        projection_type="mercator",
         showland=True, landcolor="rgb(40,60,40)",
         showocean=True, oceancolor="rgb(10,20,50)",
         showcoastlines=True, coastlinecolor="rgba(255,255,255,0.4)",
@@ -386,19 +355,19 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         )
     )
     return fig
- 
+
 # --- 4. MAIN ---
 st.title("🛰️ Meteor-M Pass Predictor")
- 
+
 tles, fetched_at = load_tles_from_file()
- 
+
 if not tles:
     st.error(
         "❌ `tles.json` not found. "
         "Run `fetch_tles.py` locally once to generate it, then commit it to your repo."
     )
     st.stop()
- 
+
 with st.sidebar:
     try:
         age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(fetched_at)
@@ -406,17 +375,17 @@ with st.sidebar:
         st.caption(f"🕐 TLE data: {hours_ago}h ago")
     except Exception:
         st.caption(f"🕐 TLE fetched at: {fetched_at}")
- 
+
 observer_topos = Topos(latitude_degrees=LAT, longitude_degrees=LNG, elevation_m=ALT)
- 
+
 now = datetime.datetime.now(datetime.timezone.utc)
 t0 = ts.from_datetime(now)
 t1 = ts.from_datetime(now + datetime.timedelta(days=DAYS))
- 
+
 all_data = []
 rejected_passes = []
 pass_objects = []  # Store raw pass data for detail view
- 
+
 with st.spinner("Calculating passes..."):
     for sat in tles:
         try:
@@ -424,33 +393,33 @@ with st.spinner("Calculating passes..."):
         except Exception as e:
             st.warning(f"⚠️ Error computing passes for {sat.name}: {e}")
             continue
- 
+
         i = 0
         while i < len(events):
             if (events[i] == 0 and i + 2 < len(events)
                     and events[i+1] == 1 and events[i+2] == 2):
                 t_rise, t_peak, t_set = times[i], times[i+1], times[i+2]
- 
+
                 diff_peak_check = (sat - observer_topos).at(t_peak)
                 el_check, _, _ = diff_peak_check.altaz()
                 if el_check.degrees < MIN_EL:
                     i += 3
                     continue
- 
+
                 daytime = is_daytime(t_rise, LAT, LNG)
- 
+
                 if show_night or daytime:
                     diff_rise = (sat - observer_topos).at(t_rise)
                     diff_peak = (sat - observer_topos).at(t_peak)
                     diff_set  = (sat - observer_topos).at(t_set)
- 
+
                     el_peak, az_peak, _ = diff_peak.altaz()
                     _, az_rise, _       = diff_rise.altaz()
                     _, az_set, _        = diff_set.altaz()
- 
+
                     duration_s = (t_set - t_rise) * 24 * 3600
                     pass_id = len(all_data)
- 
+
                     all_data.append({
                         "Satellite":      sat.name,
                         "Local Time":     t_rise.astimezone(LOCAL_TZ).strftime("%d %b, %H:%M"),
@@ -474,27 +443,27 @@ with st.spinner("Calculating passes..."):
                 i += 3
             else:
                 i += 1
- 
+
 # --- 5. DISPLAY ---
 if all_data:
     df = pd.DataFrame(all_data).sort_values("RawTime").reset_index(drop=True)
     # Keep sorted index aligned with pass_objects
     sorted_indices = list(pd.DataFrame(all_data).sort_values("RawTime").index)
     sorted_pass_objects = [pass_objects[i] for i in sorted_indices]
- 
+
     next_pass = df.iloc[0]
     st.success(f"🎯 **Next pass:** {next_pass['Satellite']} — {next_pass['Local Time']}")
- 
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Max Elevation",  next_pass["Max El"])
     c2.metric("Peak Direction", next_pass["Peak Direction"])
     c3.metric("Duration",       next_pass["Duration"])
     c4.metric("Path",           next_pass["Path"])
- 
+
     st.divider()
     st.subheader(f"All passes — next {DAYS} day(s)")
     st.caption("Click a row to see the sky plot and ground track.")
- 
+
     display_df = df.drop(columns=["RawTime"]).copy()
     selection = st.dataframe(
         display_df,
@@ -503,11 +472,11 @@ if all_data:
         on_select="rerun",
         selection_mode="single-row",
     )
- 
+
     selected_rows = selection.selection.rows
     if selected_rows:
         st.session_state["selected_pass"] = selected_rows[0]
- 
+
     # --- 6. DETAIL VIEW ---
     if "selected_pass" in st.session_state:
         sel_idx = st.session_state["selected_pass"]
@@ -516,12 +485,12 @@ if all_data:
             sat = p["sat"]
             t_rise, t_peak, t_set = p["t_rise"], p["t_peak"], p["t_set"]
             row = df.iloc[sel_idx]
- 
+
             st.divider()
             st.subheader(f"📡 {row['Satellite']} — {row['Local Time']}")
- 
+
             timeline = compute_pass_timeline(sat, observer_topos, t_rise, t_set)
- 
+
             col_sky, col_map = st.columns(2)
             with col_sky:
                 st.markdown("**🌐 Sky Plot**")
@@ -531,7 +500,7 @@ if all_data:
                 st.markdown("**🗺️ Ground Track**")
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 width="stretch", key="groundtrack")
- 
+
             # Minute-by-minute table — strictly every 60s from AOS, no wall-clock alignment
             st.markdown("**⏱️ Minute-by-minute tracking**")
             duration_s = (t_set - t_rise) * 24 * 3600
@@ -549,16 +518,16 @@ if all_data:
                     "Direction": get_compass_dir(az.degrees),
                 })
                 sec += 60
- 
+
             st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
- 
+
             if st.button("✖ Close detail"):
                 del st.session_state["selected_pass"]
                 st.rerun()
- 
+
 else:
     st.warning("No eligible passes found. Try lowering min elevation or enabling night passes.")
- 
+
 with st.expander(f"Rejected passes ({len(rejected_passes)})"):
     for msg in rejected_passes:
         st.write(msg)
