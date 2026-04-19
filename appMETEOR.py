@@ -345,7 +345,6 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=False,
         height=500,
-        width=600,
     )
     return fig
  
