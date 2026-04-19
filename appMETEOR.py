@@ -12,8 +12,9 @@ st.set_page_config(page_title="Meteor-M TLE Predictor", page_icon="🛰️", lay
 
 TLE_FILE = Path(__file__).parent / "tles.json"
 
-# Meteor LRPT half-swath distance
-METEOR_HALF_SWATH_KM = 1400.0
+# Meteor LRPT scan half-angle and altitude used in swath calculation
+METEOR_SCAN_HALF_ANGLE = 55.4
+METEOR_ALT_KM = 820.0
 
 # --- 2. SIDEBAR ---
 with st.sidebar.form("location_form"):
@@ -102,30 +103,12 @@ def compute_pass_timeline(sat, observer_topos, t_rise, t_set):
         diff = (sat - observer_topos).at(t)
         el, az, _ = diff.altaz()
         geo = wgs84.subpoint_of(sat.at(t))
-
-        # True bearing using Skyfield velocity vector (works correctly near poles)
-        pos_vel = sat.at(t)
-        # Get position and velocity in ITRF (Earth-fixed) frame
-        xyz = pos_vel.position.km
-        vxyz = pos_vel.velocity.km_per_s
-        lat_r = math.radians(geo.latitude.degrees)
-        lon_r = math.radians(geo.longitude.degrees)
-        # East and North unit vectors at satellite subpoint
-        east  = [-math.sin(lon_r), math.cos(lon_r), 0.0]
-        north = [-math.sin(lat_r)*math.cos(lon_r),
-                 -math.sin(lat_r)*math.sin(lon_r),
-                  math.cos(lat_r)]
-        v_east  = sum(vxyz[j]*east[j]  for j in range(3))
-        v_north = sum(vxyz[j]*north[j] for j in range(3))
-        bearing = math.degrees(math.atan2(v_east, v_north)) % 360
-
         rows.append({
             "t": t,
-            "el": max(0.0, el.degrees),
+            "el": max(0.0, el.degrees),  # clamp to 0, never skip
             "az": az.degrees,
             "lat": geo.latitude.degrees,
             "lon": geo.longitude.degrees,
-            "bearing": bearing,
             "label": t.astimezone(LOCAL_TZ).strftime("%H:%M:%S"),
         })
     return rows
@@ -247,14 +230,17 @@ def make_sky_plot(timeline, sat_name):
     )
     return fig
 
-def swath_edge(sat_lat, sat_lon, bearing_deg):
+def swath_edge(sat_lat, sat_lon, sat_alt_km, bearing_deg, scan_angle_deg):
     """
-    Compute swath edge lat/lon for Meteor LRPT.
-    Meteor MSU-MR swath = 2800km total, 1400km per side.
-    Uses direct great-circle offset — no scan angle approximation needed.
+    Compute swath edge lat/lon using proper Earth geometry.
+    scan_angle_deg: half-angle from nadir (±55.4° for Meteor LRPT).
     """
-    HALF_SWATH_KM = 1400.0
-    return offset_latlon(sat_lat, sat_lon, bearing_deg, HALF_SWATH_KM)
+    R = 6371.0
+    # Earth central angle from satellite nadir to swath edge
+    rho = math.asin((R / (R + sat_alt_km)) * math.sin(math.radians(scan_angle_deg)))
+    # Ground distance in km
+    ground_dist_km = R * (math.radians(scan_angle_deg) - rho)
+    return offset_latlon(sat_lat, sat_lon, bearing_deg, ground_dist_km)
 
 def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     """Ground track map with correct swath overlay and minute markers."""
@@ -263,13 +249,27 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     labels = [r["label"] for r in timeline]
 
     # --- Swath edges using proper Earth geometry ---
+    SCAN_HALF_ANGLE = 55.4
+    SAT_ALT_KM = 820.0
     left_lats, left_lons = [], []
     right_lats, right_lons = [], []
 
     for i in range(len(timeline)):
-        bearing = timeline[i]["bearing"]
-        ll = swath_edge(lats[i], lons[i], (bearing - 90) % 360)
-        rl = swath_edge(lats[i], lons[i], (bearing + 90) % 360)
+        # Use wide window bearing to smooth direction changes at orbit apex
+        i0 = max(0, i - 4)
+        i1 = min(len(timeline) - 1, i + 4)
+        dlat = timeline[i1]["lat"] - timeline[i0]["lat"]
+        dlon = timeline[i1]["lon"] - timeline[i0]["lon"]
+        # If dlat is near zero (apex), use local derivative instead
+        if abs(dlat) < 0.01 and abs(dlon) < 0.01:
+            i0 = max(0, i - 1)
+            i1 = min(len(timeline) - 1, i + 1)
+            dlat = timeline[i1]["lat"] - timeline[i0]["lat"]
+            dlon = timeline[i1]["lon"] - timeline[i0]["lon"]
+        bearing = math.degrees(math.atan2(dlon, dlat)) % 360
+
+        ll = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing - 90) % 360, SCAN_HALF_ANGLE)
+        rl = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing + 90) % 360, SCAN_HALF_ANGLE)
         left_lats.append(ll[0]);  left_lons.append(ll[1])
         right_lats.append(rl[0]); right_lons.append(rl[1])
 
@@ -331,15 +331,6 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         textfont=dict(color="orange"), hoverinfo="skip"
     ))
 
-    # Auto-fit to ground track + observer only, not swath (swath distorts badly on Mercator at high lat)
-    pad = 15
-    fit_lats = lats + [observer_lat]
-    fit_lons = lons + [observer_lon]
-    lat_min = max(-80, min(fit_lats) - pad)
-    lat_max = min(85,  max(fit_lats) + pad)
-    lon_min = min(fit_lons) - pad
-    lon_max = max(fit_lons) + pad
-
     fig.update_geos(
         projection_type="mercator",
         showland=True, landcolor="rgb(40,60,40)",
@@ -347,16 +338,13 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         showcoastlines=True, coastlinecolor="rgba(255,255,255,0.4)",
         showcountries=True, countrycolor="rgba(255,255,255,0.3)",
         bgcolor="rgba(0,0,0,0)",
+        fitbounds="locations",
     )
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=20, b=20),
         showlegend=False,
         height=420,
-        geo=dict(
-            lataxis=dict(range=[lat_min, lat_max]),
-            lonaxis=dict(range=[lon_min, lon_max]),
-        )
     )
     return fig
 
@@ -466,7 +454,7 @@ if all_data:
 
     st.divider()
     st.subheader(f"All passes — next {DAYS} day(s)")
-    st.caption("Click a row to see the sky plot and satellite path.")
+    st.caption("Check the box to see the sky plot and satellite path.")
 
     display_df = df.drop(columns=["RawTime"]).copy()
     selection = st.dataframe(
