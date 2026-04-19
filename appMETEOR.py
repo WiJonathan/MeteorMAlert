@@ -3,7 +3,6 @@ import datetime
 import json
 import math
 import pandas as pd
-import pytz
 import plotly.graph_objects as go
 from pathlib import Path
 from skyfield.api import Topos, load, EarthSatellite, wgs84
@@ -24,9 +23,9 @@ with st.sidebar.form("location_form"):
     new_lng = st.number_input("Longitude", value=6.45, format="%.4f")
     new_alt = st.number_input("Altitude (m)", value=18)
 
-    all_tz = pytz.all_timezones
-    default_tz_idx = all_tz.index("Europe/Amsterdam") if "Europe/Amsterdam" in all_tz else 0
-    new_tz = st.selectbox("Local Timezone", all_tz, index=default_tz_idx)
+    tz_options = [f"UTC{'+' if h >= 0 else ''}{h}" for h in range(-12, 15)]
+    default_tz_idx = tz_options.index("UTC+2") if "UTC+2" in tz_options else 0
+    new_tz = st.selectbox("Timezone", tz_options, index=default_tz_idx)
 
     new_el = st.slider("Min Elevation (°)", 0, 90, 10)
     new_days = st.slider("Prediction Window (Days)", 1, 10, 5)
@@ -37,7 +36,8 @@ with st.sidebar.form("location_form"):
 LAT = new_lat
 LNG = new_lng
 ALT = new_alt
-LOCAL_TZ = pytz.timezone(new_tz)
+tz_offset = int(new_tz.replace("UTC", "").replace("+", "") or "0")
+LOCAL_TZ = datetime.timezone(datetime.timedelta(hours=tz_offset))
 MIN_EL = new_el
 DAYS = new_days
 
@@ -132,15 +132,18 @@ def make_sky_plot(timeline, sat_name):
         x, y = azel_to_xy(r["az"], r["el"])
         xs.append(x); ys.append(y); labels.append(r["label"])
 
-    # Minute markers
-    min_xs, min_ys, min_labels = [], [], []
+    # Minute markers — skip above 60° elevation (spreads ugly near zenith)
+    min_xs, min_ys, min_labels, min_positions = [], [], [], []
     last_min = None
+    toggle = 0
     for r in timeline:
         dt = r["t"].astimezone(LOCAL_TZ)
-        if dt.second < 30 and last_min != dt.minute:
+        if dt.second < 30 and last_min != dt.minute and r["el"] < 60:
             x, y = azel_to_xy(r["az"], r["el"])
             min_xs.append(x); min_ys.append(y)
             min_labels.append(r["label"])
+            min_positions.append("top right" if toggle % 2 == 0 else "top left")
+            toggle += 1
             last_min = dt.minute
 
     peak_idx = max(range(len(timeline)), key=lambda i: timeline[i]["el"])
@@ -209,12 +212,13 @@ def make_sky_plot(timeline, sat_name):
     ))
 
     # Minute markers
-    fig.add_trace(go.Scatter(
-        x=min_xs, y=min_ys, mode="markers+text",
-        marker=dict(color="yellow", size=7),
-        text=min_labels, textposition="top right",
-        textfont=dict(size=9), hoverinfo="skip", showlegend=False
-    ))
+    for i in range(len(min_xs)):
+        fig.add_trace(go.Scatter(
+            x=[min_xs[i]], y=[min_ys[i]], mode="markers+text",
+            marker=dict(color="yellow", size=7),
+            text=[min_labels[i]], textposition=min_positions[i],
+            textfont=dict(size=9), hoverinfo="skip", showlegend=False
+        ))
 
     fig.update_layout(
         xaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="y"),
@@ -339,7 +343,7 @@ with st.sidebar:
 
 observer_topos = Topos(latitude_degrees=LAT, longitude_degrees=LNG, elevation_m=ALT)
 
-now = datetime.datetime.now(pytz.utc)
+now = datetime.datetime.now(datetime.timezone.utc)
 t0 = ts.from_datetime(now)
 t1 = ts.from_datetime(now + datetime.timedelta(days=DAYS))
 
@@ -467,12 +471,13 @@ if all_data:
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 width="stretch", key="groundtrack")
 
-            # Minute-by-minute table — sample every 60s from AOS, no gaps
+            # Minute-by-minute table — strictly every 60s from AOS, no wall-clock alignment
             st.markdown("**⏱️ Minute-by-minute tracking**")
             duration_s = (t_set - t_rise) * 24 * 3600
             table_rows = []
-            for sec in range(0, int(duration_s) + 60, 60):
-                frac = min(sec / duration_s, 1.0)
+            sec = 0
+            while sec <= duration_s:
+                frac = sec / duration_s
                 t_sample = t_rise + frac * (t_set - t_rise)
                 diff = (sat - observer_topos).at(t_sample)
                 el, az, _ = diff.altaz()
@@ -482,6 +487,7 @@ if all_data:
                     "Azimuth":   f"{az.degrees:.1f}°",
                     "Direction": get_compass_dir(az.degrees),
                 })
+                sec += 60
 
             st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
 
