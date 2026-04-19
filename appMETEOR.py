@@ -103,12 +103,30 @@ def compute_pass_timeline(sat, observer_topos, t_rise, t_set):
         diff = (sat - observer_topos).at(t)
         el, az, _ = diff.altaz()
         geo = wgs84.subpoint_of(sat.at(t))
+
+        # True bearing using Skyfield velocity vector (works correctly near poles)
+        pos_vel = sat.at(t)
+        # Get position and velocity in ITRF (Earth-fixed) frame
+        xyz = pos_vel.position.km
+        vxyz = pos_vel.velocity.km_per_s
+        lat_r = math.radians(geo.latitude.degrees)
+        lon_r = math.radians(geo.longitude.degrees)
+        # East and North unit vectors at satellite subpoint
+        east  = [-math.sin(lon_r), math.cos(lon_r), 0.0]
+        north = [-math.sin(lat_r)*math.cos(lon_r),
+                 -math.sin(lat_r)*math.sin(lon_r),
+                  math.cos(lat_r)]
+        v_east  = sum(vxyz[j]*east[j]  for j in range(3))
+        v_north = sum(vxyz[j]*north[j] for j in range(3))
+        bearing = math.degrees(math.atan2(v_east, v_north)) % 360
+
         rows.append({
             "t": t,
-            "el": max(0.0, el.degrees),  # clamp to 0, never skip
+            "el": max(0.0, el.degrees),
             "az": az.degrees,
             "lat": geo.latitude.degrees,
             "lon": geo.longitude.degrees,
+            "bearing": bearing,
             "label": t.astimezone(LOCAL_TZ).strftime("%H:%M:%S"),
         })
     return rows
@@ -255,19 +273,7 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     right_lats, right_lons = [], []
 
     for i in range(len(timeline)):
-        # Use wide window bearing to smooth direction changes at orbit apex
-        i0 = max(0, i - 4)
-        i1 = min(len(timeline) - 1, i + 4)
-        dlat = timeline[i1]["lat"] - timeline[i0]["lat"]
-        dlon = timeline[i1]["lon"] - timeline[i0]["lon"]
-        # If dlat is near zero (apex), use local derivative instead
-        if abs(dlat) < 0.01 and abs(dlon) < 0.01:
-            i0 = max(0, i - 1)
-            i1 = min(len(timeline) - 1, i + 1)
-            dlat = timeline[i1]["lat"] - timeline[i0]["lat"]
-            dlon = timeline[i1]["lon"] - timeline[i0]["lon"]
-        bearing = math.degrees(math.atan2(dlon, dlat)) % 360
-
+        bearing = timeline[i]["bearing"]
         ll = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing - 90) % 360, SCAN_HALF_ANGLE)
         rl = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing + 90) % 360, SCAN_HALF_ANGLE)
         left_lats.append(ll[0]);  left_lons.append(ll[1])
@@ -454,7 +460,7 @@ if all_data:
 
     st.divider()
     st.subheader(f"All passes — next {DAYS} day(s)")
-    st.caption("Check the box to see the sky plot and satellite path.")
+    st.caption("Click a row to see the sky plot and ground track.")
 
     display_df = df.drop(columns=["RawTime"]).copy()
     selection = st.dataframe(
@@ -488,7 +494,7 @@ if all_data:
                 st.markdown("**🌐 Sky Plot**")
                 st.plotly_chart(make_sky_plot(timeline, sat.name),
                                 use_container_width=True, key="skyplot")
-                st.markdown("**🗺️ Satellite Path**")
+                st.markdown("**🗺️ Ground Track**")
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 use_container_width=True, key="groundtrack")
 
