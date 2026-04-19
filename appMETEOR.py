@@ -247,15 +247,6 @@ def make_sky_plot(timeline, sat_name):
     )
     return fig
 
-def swath_edge(sat_lat, sat_lon, bearing_deg):
-    """
-    Compute swath edge lat/lon for Meteor LRPT.
-    Meteor MSU-MR swath = 2800km total, 1400km per side.
-    Uses direct great-circle offset — no scan angle approximation needed.
-    """
-    HALF_SWATH_KM = 1400.0
-    return offset_latlon(sat_lat, sat_lon, bearing_deg, HALF_SWATH_KM)
-
 def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     """Ground track map with correct swath overlay and minute markers."""
     lats = [r["lat"] for r in timeline]
