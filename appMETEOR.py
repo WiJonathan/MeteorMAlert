@@ -278,7 +278,8 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         showborders=True, bordercolor="rgba(255,255,255,0.2)",
         showcountries=True, countrycolor="rgba(255,255,255,0.15)",
         bgcolor="rgba(0,0,0,0)",
-        lataxis_range=[20, 80], lonaxis_range=[-30, 50],
+        lataxis=dict(range=[20, 80]),
+        lonaxis=dict(range=[-30, 50]),
     )
 
     fig.update_layout(
