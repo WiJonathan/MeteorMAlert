@@ -467,7 +467,9 @@ if all_data:
 
     selected_rows = selection.selection.rows
     if selected_rows:
-        st.session_state["selected_pass"] = selected_rows[0]
+        if st.session_state.get("selected_pass") != selected_rows[0]:
+            st.session_state["selected_pass"] = selected_rows[0]
+            st.rerun()
 
     # --- 6. DETAIL VIEW ---
     if "selected_pass" in st.session_state:
