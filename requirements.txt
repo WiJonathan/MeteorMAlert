@@ -1,5 +1,6 @@
-requests
-pandas
 streamlit
-pytz
 skyfield
+pandas
+pytz
+requests
+plotly
