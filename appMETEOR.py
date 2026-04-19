@@ -468,8 +468,6 @@ if all_data:
     selected_rows = selection.selection.rows
     if selected_rows:
         st.session_state["selected_pass"] = selected_rows[0]
-    elif "selected_pass" not in st.session_state:
-        pass  # No selection yet, detail view stays hidden
 
     # --- 6. DETAIL VIEW ---
     if "selected_pass" in st.session_state:
