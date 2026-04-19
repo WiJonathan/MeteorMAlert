@@ -1,6 +1,5 @@
 streamlit
 skyfield
 pandas
-pytz
 requests
 plotly
