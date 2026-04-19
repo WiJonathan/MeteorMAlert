@@ -342,7 +342,7 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     )
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=0, t=0, b=0),
+        margin=dict(l=20, r=20, t=20, b=20),
         showlegend=False,
         height=420,
     )
