@@ -331,6 +331,15 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         textfont=dict(color="orange"), hoverinfo="skip"
     ))
 
+    # Auto-fit to ground track + observer only, not swath (swath distorts badly on Mercator at high lat)
+    pad = 15
+    fit_lats = lats + [observer_lat]
+    fit_lons = lons + [observer_lon]
+    lat_min = max(-80, min(fit_lats) - pad)
+    lat_max = min(85,  max(fit_lats) + pad)
+    lon_min = min(fit_lons) - pad
+    lon_max = max(fit_lons) + pad
+
     fig.update_geos(
         projection_type="mercator",
         showland=True, landcolor="rgb(40,60,40)",
@@ -338,13 +347,16 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         showcoastlines=True, coastlinecolor="rgba(255,255,255,0.4)",
         showcountries=True, countrycolor="rgba(255,255,255,0.3)",
         bgcolor="rgba(0,0,0,0)",
-        fitbounds="locations",
     )
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=20, b=20),
         showlegend=False,
         height=420,
+        geo=dict(
+            lataxis=dict(range=[lat_min, lat_max]),
+            lonaxis=dict(range=[lon_min, lon_max]),
+        )
     )
     return fig
 
