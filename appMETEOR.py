@@ -1,3 +1,4 @@
+
 import streamlit as st
 import datetime
 import json
@@ -270,22 +271,35 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         right_lats.append(rl[0]); right_lons.append(rl[1])
  
     # Polygon: left edge forward + right edge reversed = closed wedge
-    # Interpolate extra points along each edge to avoid projection jaggedness
-    def interpolate_edge(edge_lats, edge_lons, factor=3):
+    # Use great circle interpolation to avoid projection jaggedness
+    def gc_interpolate(lats, lons, steps=5):
+        """Interpolate between points along great circles."""
         out_lats, out_lons = [], []
-        for i in range(len(edge_lats) - 1):
-            out_lats.append(edge_lats[i])
-            out_lons.append(edge_lons[i])
-            for j in range(1, factor):
-                f = j / factor
-                out_lats.append(edge_lats[i] + f * (edge_lats[i+1] - edge_lats[i]))
-                out_lons.append(edge_lons[i] + f * (edge_lons[i+1] - edge_lons[i]))
-        out_lats.append(edge_lats[-1])
-        out_lons.append(edge_lons[-1])
+        for i in range(len(lats) - 1):
+            lat1, lon1 = math.radians(lats[i]), math.radians(lons[i])
+            lat2, lon2 = math.radians(lats[i+1]), math.radians(lons[i+1])
+            for j in range(steps):
+                f = j / steps
+                # Slerp between two points on sphere
+                d = 2 * math.asin(math.sqrt(
+                    math.sin((lat2-lat1)/2)**2 +
+                    math.cos(lat1)*math.cos(lat2)*math.sin((lon2-lon1)/2)**2
+                ))
+                if d < 1e-10:
+                    out_lats.append(lats[i]); out_lons.append(lons[i])
+                    continue
+                A = math.sin((1-f)*d)/math.sin(d)
+                B = math.sin(f*d)/math.sin(d)
+                x = A*math.cos(lat1)*math.cos(lon1) + B*math.cos(lat2)*math.cos(lon2)
+                y = A*math.cos(lat1)*math.sin(lon1) + B*math.cos(lat2)*math.sin(lon2)
+                z = A*math.sin(lat1) + B*math.sin(lat2)
+                out_lats.append(math.degrees(math.atan2(z, math.sqrt(x**2+y**2))))
+                out_lons.append(math.degrees(math.atan2(y, x)))
+        out_lats.append(lats[-1]); out_lons.append(lons[-1])
         return out_lats, out_lons
  
-    il_lats, il_lons = interpolate_edge(left_lats, left_lons)
-    ir_lats, ir_lons = interpolate_edge(right_lats, right_lons)
+    il_lats, il_lons = gc_interpolate(left_lats, left_lons)
+    ir_lats, ir_lons = gc_interpolate(right_lats, right_lons)
  
     poly_lats = il_lats + list(reversed(ir_lats)) + [il_lats[0]]
     poly_lons = il_lons + list(reversed(ir_lons)) + [il_lons[0]]
