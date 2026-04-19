@@ -275,11 +275,8 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         showland=True, landcolor="rgb(40,60,40)",
         showocean=True, oceancolor="rgb(10,20,50)",
         showcoastlines=True, coastlinecolor="rgba(255,255,255,0.4)",
-        showborders=True, bordercolor="rgba(255,255,255,0.2)",
-        showcountries=True, countrycolor="rgba(255,255,255,0.15)",
+        showcountries=True, countrycolor="rgba(255,255,255,0.3)",
         bgcolor="rgba(0,0,0,0)",
-        lataxis=dict(range=[20, 80]),
-        lonaxis=dict(range=[-30, 50]),
     )
 
     fig.update_layout(
@@ -287,6 +284,10 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=False,
         height=420,
+        geo=dict(
+            lataxis=dict(range=[20, 80]),
+            lonaxis=dict(range=[-30, 50]),
+        )
     )
     return fig
 
@@ -434,11 +435,11 @@ if all_data:
             with col_sky:
                 st.markdown("**🌐 Sky Plot**")
                 st.plotly_chart(make_sky_plot(timeline, sat.name),
-                                use_container_width=True, key="skyplot")
+                                width="stretch", key="skyplot")
             with col_map:
                 st.markdown("**🗺️ Ground Track**")
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
-                                use_container_width=True, key="groundtrack")
+                                width="stretch", key="groundtrack")
 
             # Minute-by-minute table
             st.markdown("**⏱️ Minute-by-minute tracking**")
@@ -455,7 +456,7 @@ if all_data:
                     })
                     last_min = dt.minute
 
-            st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
 
             if st.button("✖ Close detail"):
                 del st.session_state["selected_pass"]
