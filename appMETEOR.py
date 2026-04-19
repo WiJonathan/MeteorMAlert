@@ -102,12 +102,10 @@ def compute_pass_timeline(sat, observer_topos, t_rise, t_set):
         t = t_rise + frac * (t_set - t_rise)
         diff = (sat - observer_topos).at(t)
         el, az, _ = diff.altaz()
-        if el.degrees < 0:
-            continue  # skip below-horizon samples at edges
         geo = wgs84.subpoint_of(sat.at(t))
         rows.append({
             "t": t,
-            "el": el.degrees,
+            "el": max(0.0, el.degrees),  # clamp to 0, never skip
             "az": az.degrees,
             "lat": geo.latitude.degrees,
             "lon": geo.longitude.degrees,
@@ -139,7 +137,7 @@ def make_sky_plot(timeline, sat_name):
     last_min = None
     for r in timeline:
         dt = r["t"].astimezone(LOCAL_TZ)
-        if dt.second < 15 and last_min != dt.minute:
+        if dt.second < 30 and last_min != dt.minute:
             x, y = azel_to_xy(r["az"], r["el"])
             min_xs.append(x); min_ys.append(y)
             min_labels.append(r["label"])
@@ -241,63 +239,22 @@ def swath_edge(sat_lat, sat_lon, sat_alt_km, bearing_deg, scan_angle_deg):
     return offset_latlon(sat_lat, sat_lon, bearing_deg, ground_dist_km)
 
 def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
-    """Ground track map over Europe with correct geometric swath and minute markers."""
+    """Ground track map over Europe with minute markers."""
     lats = [r["lat"] for r in timeline]
     lons = [r["lon"] for r in timeline]
     labels = [r["label"] for r in timeline]
-
-    # Meteor LRPT scan half-angle
-    SCAN_HALF_ANGLE = 55.4
-    # Approximate Meteor altitude
-    SAT_ALT_KM = 820.0
-
-    left_lats, left_lons, right_lats, right_lons = [], [], [], []
-    for i in range(len(timeline)):
-        if i < len(timeline) - 1:
-            dlat = timeline[i+1]["lat"] - timeline[i]["lat"]
-            dlon = timeline[i+1]["lon"] - timeline[i]["lon"]
-        else:
-            dlat = timeline[i]["lat"] - timeline[i-1]["lat"]
-            dlon = timeline[i]["lon"] - timeline[i-1]["lon"]
-        bearing = math.degrees(math.atan2(dlon, dlat)) % 360
-        ll = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing - 90) % 360, SCAN_HALF_ANGLE)
-        rl = swath_edge(lats[i], lons[i], SAT_ALT_KM, (bearing + 90) % 360, SCAN_HALF_ANGLE)
-        left_lats.append(ll[0]); left_lons.append(ll[1])
-        right_lats.append(rl[0]); right_lons.append(rl[1])
 
     # Minute markers
     min_lats, min_lons, min_labels = [], [], []
     last_min = None
     for r in timeline:
         dt = r["t"].astimezone(LOCAL_TZ)
-        if dt.second < 15 and last_min != dt.minute:
+        if dt.second < 30 and last_min != dt.minute:
             min_lats.append(r["lat"]); min_lons.append(r["lon"])
             min_labels.append(r["label"])
             last_min = dt.minute
 
     fig = go.Figure()
-
-    # Swath fill
-    swath_lats = left_lats + list(reversed(right_lats)) + [left_lats[0]]
-    swath_lons = left_lons + list(reversed(right_lons)) + [left_lons[0]]
-    fig.add_trace(go.Scattergeo(
-        lat=swath_lats, lon=swath_lons, mode="lines",
-        fill="toself", fillcolor="rgba(0,170,255,0.15)",
-        line=dict(color="rgba(0,170,255,0.5)", width=1),
-        name="Swath", hoverinfo="skip"
-    ))
-
-    # Swath edges separately for clarity
-    fig.add_trace(go.Scattergeo(
-        lat=left_lats, lon=left_lons, mode="lines",
-        line=dict(color="rgba(0,170,255,0.6)", width=1, dash="dot"),
-        hoverinfo="skip", showlegend=False
-    ))
-    fig.add_trace(go.Scattergeo(
-        lat=right_lats, lon=right_lons, mode="lines",
-        line=dict(color="rgba(0,170,255,0.6)", width=1, dash="dot"),
-        hoverinfo="skip", showlegend=False
-    ))
 
     # Ground track
     fig.add_trace(go.Scattergeo(
@@ -510,7 +467,7 @@ if all_data:
             last_min = None
             for r in timeline:
                 dt = r["t"].astimezone(LOCAL_TZ)
-                if dt.second < 15 and last_min != dt.minute:
+                if dt.second < 30 and last_min != dt.minute:
                     table_rows.append({
                         "Time":      r["label"],
                         "Elevation": f"{r['el']:.1f}°",
