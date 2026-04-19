@@ -226,7 +226,7 @@ def make_sky_plot(timeline, sat_name):
         plot_bgcolor="rgb(0,10,30)",
         paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=20, b=20),
-        height=420,
+        height=350,
     )
     return fig
 
