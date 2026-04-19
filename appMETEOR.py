@@ -329,7 +329,6 @@ tles, fetched_at = load_tles_from_file()
 if not tles:
     st.error(
         "❌ `tles.json` not found. "
-        "Run `fetch_tles.py` locally once to generate it, then commit it to your repo."
     )
     st.stop()
 
@@ -467,7 +466,7 @@ if all_data:
                 st.plotly_chart(make_sky_plot(timeline, sat.name),
                                 width="stretch", key="skyplot")
             with col_map:
-                st.markdown("**🗺️ Ground Track**")
+                st.markdown("**🗺️ Sattelite Path**")
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 width="stretch", key="groundtrack")
 
