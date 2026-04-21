@@ -8,7 +8,7 @@ from pathlib import Path
 from skyfield.api import Topos, load, EarthSatellite, wgs84
 
 # --- 1. SETTINGS ---
-st.set_page_config(page_title="Meteor-M TLE Predictor", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="Meteor-M and MetOp TLE Predictor", page_icon="🛰️", layout="wide")
 
 TLE_FILE = Path(__file__).parent / "tles.json"
 
@@ -324,14 +324,13 @@ def make_ground_track(timeline, sat_name, observer_lat, observer_lon):
     return fig
 
 # --- 4. MAIN ---
-st.title("🛰️ Meteor-M Pass Predictor")
+st.title("🛰️ Meteor-M and MetOp Pass Predictor")
 
 tles, fetched_at = load_tles_from_file()
 
 if not tles:
     st.error(
         "❌ `tles.json` not found. "
-        "Run `fetch_tles.py` locally once to generate it, then commit it to your repo."
     )
     st.stop()
 
