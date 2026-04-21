@@ -12,6 +12,18 @@ st.set_page_config(page_title="Meteor-M TLE Predictor", page_icon="🛰️", lay
 
 TLE_FILE = Path(__file__).parent / "tles.json"
 
+# Load satellite names for the sidebar selector (before the form)
+@st.cache_data(ttl=3600)
+def load_tle_strings():
+    if not TLE_FILE.exists():
+        return None, None
+    with open(TLE_FILE) as f:
+        data = json.load(f)
+    return list(data["satellites"].values()), data["fetched_at"]
+
+_records_preview, _ = load_tle_strings()
+available_sat_names = [r["name"] for r in _records_preview] if _records_preview else []
+
 # --- 2. SIDEBAR ---
 with st.sidebar.form("location_form"):
     st.header("📍 Location & Settings")
@@ -27,6 +39,12 @@ with st.sidebar.form("location_form"):
     new_days = st.slider("Prediction Window (Days)", 1, 10, 5)
     show_night = st.checkbox("Show Night passes", value=False)
 
+    selected_sats = st.multiselect(
+        "Satellites",
+        options=available_sat_names,
+        default=available_sat_names,
+    )
+
     submitted = st.form_submit_button("Apply")
 
 LAT = new_lat
@@ -41,19 +59,12 @@ DAYS = new_days
 
 ts = load.timescale(builtin=True)
 
-@st.cache_data(ttl=3600)
-def load_tle_strings():
-    if not TLE_FILE.exists():
-        return None, None
-    with open(TLE_FILE) as f:
-        data = json.load(f)
-    return list(data["satellites"].values()), data["fetched_at"]
-
 def load_tles_from_file():
     records, fetched_at = load_tle_strings()
     if not records:
         return None, None
-    sats = [EarthSatellite(r["tle_line1"], r["tle_line2"], r["name"], ts) for r in records]
+    sats = [EarthSatellite(r["tle_line1"], r["tle_line2"], r["name"], ts)
+            for r in records if r["name"] in selected_sats]
     return sats, fetched_at
 
 def get_compass_dir(azimuth: float) -> str:
@@ -418,7 +429,7 @@ if all_data:
 
     st.divider()
     st.subheader(f"All passes — next {DAYS} day(s)")
-    st.caption("Check the box to see the sky plot and satellite path.")
+    st.caption("Click a row to see the sky plot and ground track.")
 
     display_df = df.drop(columns=["RawTime"]).copy()
     selection = st.dataframe(
@@ -452,7 +463,7 @@ if all_data:
                 st.markdown("**🌐 Sky Plot**")
                 st.plotly_chart(make_sky_plot(timeline, sat.name),
                                 use_container_width=True, key="skyplot")
-                st.markdown("**🗺️ Satellite Path**")
+                st.markdown("**🗺️ Ground Track**")
                 st.plotly_chart(make_ground_track(timeline, sat.name, LAT, LNG),
                                 use_container_width=True, key="groundtrack")
 
