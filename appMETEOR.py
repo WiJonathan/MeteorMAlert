@@ -6,13 +6,21 @@ import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
 from skyfield.api import Topos, load, EarthSatellite, wgs84
+from streamlit_js_eval import streamlit_js_eval
+from zoneinfo import ZoneInfo
 
 # --- 1. SETTINGS ---
 st.set_page_config(page_title="Meteor-M and MetOp TLE Predictor", page_icon="🛰️", layout="wide")
 
 TLE_FILE = Path(__file__).parent / "tles.json"
 
-# Load satellite names for the sidebar selector (before the form)
+# --- Timezone detection ---
+browser_tz = streamlit_js_eval(
+    js_expressions="Intl.DateTimeFormat().resolvedOptions().timeZone",
+    key="tz"
+)
+
+# --- 2. LOAD TLE PREVIEW ---
 @st.cache_data(ttl=3600)
 def load_tle_strings():
     if not TLE_FILE.exists():
@@ -24,16 +32,43 @@ def load_tle_strings():
 _records_preview, _ = load_tle_strings()
 available_sat_names = [r["name"] for r in _records_preview] if _records_preview else []
 
-# --- 2. SIDEBAR ---
+# --- 3. SIDEBAR ---
 with st.sidebar.form("location_form"):
     st.header("📍 Location & Settings")
+
     new_lat = st.number_input("Latitude", value=52.10, format="%.4f")
     new_lng = st.number_input("Longitude", value=6.45, format="%.4f")
     new_alt = st.number_input("Altitude (m)", value=18)
 
-    tz_options = [f"UTC{'+' if h >= 0 else ''}{h}" for h in range(-12, 15)]
-    default_tz_idx = tz_options.index("UTC+2") if "UTC+2" in tz_options else 0
-    new_tz = st.selectbox("Timezone", tz_options, index=default_tz_idx)
+    # --- Timezone UI ---
+    st.subheader("🕒 Timezone")
+
+    use_auto_tz = st.checkbox("Use browser timezone", value=True)
+
+    if browser_tz:
+        st.caption(f"Detected: {browser_tz}")
+    else:
+        st.caption("Could not detect browser timezone")
+
+    # UTC fallback (15-minute increments)
+    def make_tz_options():
+        result = []
+        for minutes in range(-12 * 60, 14 * 60 + 1, 15):
+            h, m = divmod(abs(minutes), 60)
+            sign = "+" if minutes >= 0 else "-"
+            result.append(f"UTC{sign}{h}:{m:02d}")
+        return result
+
+    tz_options = make_tz_options()
+    default_tz = "UTC+02:00"
+    default_idx = tz_options.index(default_tz) if default_tz in tz_options else 0
+
+    new_tz = st.selectbox(
+        "Manual UTC offset",
+        tz_options,
+        index=default_idx,
+        disabled=use_auto_tz
+    )
 
     new_el = st.slider("Min Elevation (°)", 0, 90, 10)
     new_days = st.slider("Prediction Window (Days)", 1, 10, 5)
@@ -47,11 +82,32 @@ with st.sidebar.form("location_form"):
 
     submitted = st.form_submit_button("Apply")
 
+# --- 4. TIMEZONE RESOLUTION ---
+
+def parse_utc_offset(tz_str):
+    tz_offset_str = tz_str.replace("UTC", "")
+    sign = -1 if tz_offset_str.startswith("-") else 1
+    tz_offset_str = tz_offset_str.lstrip("+-")
+
+    if ":" in tz_offset_str:
+        hh, mm = map(int, tz_offset_str.split(":"))
+    else:
+        hh, mm = int(tz_offset_str), 0
+
+    return datetime.timezone(datetime.timedelta(minutes=sign * (hh * 60 + mm)))
+
+# Decide which timezone to use
+if use_auto_tz and browser_tz:
+    try:
+        LOCAL_TZ = ZoneInfo(browser_tz)
+    except Exception:
+        LOCAL_TZ = datetime.timezone.utc
+else:
+    LOCAL_TZ = parse_utc_offset(new_tz)
+
 LAT = new_lat
 LNG = new_lng
 ALT = new_alt
-tz_offset = int(new_tz.replace("UTC", "").replace("+", "") or "0")
-LOCAL_TZ = datetime.timezone(datetime.timedelta(hours=tz_offset))
 MIN_EL = new_el
 DAYS = new_days
 
