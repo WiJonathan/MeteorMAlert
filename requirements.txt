@@ -3,3 +3,4 @@ skyfield
 pandas
 requests
 plotly
+streamlit-js-eval
