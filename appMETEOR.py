@@ -63,12 +63,11 @@ with st.sidebar.form("location_form"):
     default_tz = "UTC+02:00"
     default_idx = tz_options.index(default_tz) if default_tz in tz_options else 0
 
-    new_tz = st.selectbox(
-        "Manual UTC offset",
-        tz_options,
-        index=default_idx,
-        disabled=use_auto_tz
-    )
+new_tz = st.selectbox(
+    "Manual UTC offset",
+    tz_options,
+    index=default_idx
+)
 
     new_el = st.slider("Min Elevation (°)", 0, 90, 10)
     new_days = st.slider("Prediction Window (Days)", 1, 10, 5)
