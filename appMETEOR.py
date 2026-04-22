@@ -46,9 +46,9 @@ with st.sidebar.form("location_form"):
     use_auto_tz = st.checkbox("Use browser timezone", value=True)
 
     if browser_tz:
-        st.caption(f"Detected: {browser_tz}")
+        st.caption(f"Detected: {browser_tz}. Uncheck "use browser timezone" and click apply, then select your timezone manually and click apply again to use the manual offset.")
     else:
-        st.caption("Could not detect browser timezone")
+        st.caption("Could not detect browser timezone. Please uncheck "use browser timezone" and click apply. Then use manual timezone offset and click apply again.")
 
     # UTC fallback (15-minute increments)
     def make_tz_options():
