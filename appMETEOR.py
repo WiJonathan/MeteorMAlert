@@ -34,27 +34,23 @@ available_sat_names = [r["name"] for r in _records_preview] if _records_preview 
 
 # --- 3. SIDEBAR ---
 with st.sidebar.form("location_form"):
-
     st.header("📍 Location & Settings")
 
     new_lat = st.number_input("Latitude", value=52.10, format="%.4f")
     new_lng = st.number_input("Longitude", value=6.45, format="%.4f")
     new_alt = st.number_input("Altitude (m)", value=18)
 
+    # --- Timezone UI ---
     st.subheader("🕒 Timezone")
 
     use_auto_tz = st.checkbox("Use browser timezone", value=True)
-
-    browser_tz = streamlit_js_eval(
-        js_expressions="Intl.DateTimeFormat().resolvedOptions().timeZone",
-        key="tz"
-    )
 
     if browser_tz:
         st.caption(f"Detected: {browser_tz}")
     else:
         st.caption("Could not detect browser timezone")
 
+    # UTC fallback (15-minute increments)
     def make_tz_options():
         result = []
         for minutes in range(-12 * 60, 14 * 60 + 1, 15):
@@ -64,7 +60,8 @@ with st.sidebar.form("location_form"):
         return result
 
     tz_options = make_tz_options()
-    default_idx = tz_options.index("UTC+02:00") if "UTC+02:00" in tz_options else 0
+    default_tz = "UTC+02:00"
+    default_idx = tz_options.index(default_tz) if default_tz in tz_options else 0
 
     new_tz = st.selectbox(
         "Manual UTC offset",
