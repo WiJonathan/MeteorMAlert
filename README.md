@@ -16,7 +16,7 @@ A Streamlit app that predicts upcoming passes of Meteor-M and MetOp weather sate
 ## Project Structure
  
 ```
-├── app.py              # Entry point
+├── appMETEOR.py              # Entry point
 ├── charts.py           # Sky plot and ground track (Plotly)
 ├── predictions.py      # Pass finding and timeline computation
 ├── sidebar.py          # Sidebar UI
