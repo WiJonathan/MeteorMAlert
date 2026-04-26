@@ -1,6 +1,6 @@
 # 🛰️ Meteor-M & MetOp Pass Predictor
  
-A Streamlit app that predicts upcoming passes of Meteor-M and MetOp weather satellites over your location, with sky plots, ground tracks, and minute-by-minute tracking tables.
+A Streamlit app that predicts upcoming passes of Meteor-M and MetOp weather satellites over your location, with sky plots, satellite paths, and minute-by-minute tracking tables.
  
 ![Python](https://img.shields.io/badge/python-3.11+-blue) ![Streamlit](https://img.shields.io/badge/streamlit-1.x-red) ![License](https://img.shields.io/badge/license-GPL--3.0-green)
  
