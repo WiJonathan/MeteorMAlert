@@ -62,7 +62,7 @@ streamlit run app.py
 2. Set your timezone (auto-detected from the browser, or pick a manual UTC offset)
 3. Adjust the minimum elevation and prediction window
 4. Click Apply
-5. Click any row in the pass table to see the sky plot and ground track for that pass
+5. Check the box in the pass table to see the sky plot and satellite path for that pass
 ## Contributing
  
 This is a personal project but if you're into weather satellite reception and want to contribute, feel free to get in touch.
