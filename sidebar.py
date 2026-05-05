@@ -1,5 +1,3 @@
-"""Sidebar form: location, timezone and filter settings."""
- 
 import streamlit as st
 from timezone_utils import make_tz_options
  
@@ -12,14 +10,14 @@ def render_sidebar(available_sat_names: list[str], browser_tz: str | None) -> di
         show_night, selected_sats
     """
     with st.sidebar.form("location_form"):
-        st.header("📍 Location & Settings")
+        st.header("Settings")
  
         new_lat = st.number_input("Latitude",      value=52.10, format="%.4f")
         new_lng = st.number_input("Longitude",     value=6.45,  format="%.4f")
         new_alt = st.number_input("Altitude (m)",  value=18)
  
         # --- Timezone ---
-        st.subheader("🕒 Timezone")
+        st.subheader("Timezone")
         use_auto_tz = st.checkbox("Use browser timezone", value=True)
  
         if browser_tz:
@@ -78,7 +76,7 @@ def render_tle_age(fetched_at: str) -> None:
             age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(fetched_at)
             hours_ago = int(age.total_seconds() // 3600)
             if hours_ago > 72:
-                st.warning(f"⚠️ TLEs are {hours_ago}h old — predictions may be inaccurate.")
+                st.warning(f"TLEs are {hours_ago}h old — predictions may be inaccurate.")
             else:
                 st.caption(f"🕐 TLE data: {hours_ago}h ago")
         except Exception:
