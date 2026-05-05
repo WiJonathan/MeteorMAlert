@@ -98,7 +98,7 @@ else:
 
     st.divider()
     st.subheader(f"All passes — next {DAYS} day(s)")
-    st.caption("Click a row to see the sky plot and satellite path.")
+    st.caption("Check the box to see the detailed view with the sky plot and satellite path.")
 
     display_df = df.drop(columns=["RawTime"]).copy()
     selection  = st.dataframe(
