@@ -13,6 +13,7 @@ TARGET_SATS = {
     59051: "Meteor M2-4",
     38771: "MetOp-B",
     43689: "MetOp-C",
+    60543: "Arctic Weather Satellite"
 }
 
 # CelesTrak TLE format — plain text, 3 lines per satellite
@@ -32,7 +33,7 @@ def fetch():
             "tle_line1": lines[1],
             "tle_line2": lines[2],
         }
-        print(f"✅ Fetched {name} (NORAD {norad_id})")
+        print(f" Fetched {name} (NORAD {norad_id})")
 
     output = {
         "fetched_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -42,7 +43,7 @@ def fetch():
     with open("tles.json", "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"\n✅ tles.json written with {len(results)} satellites.")
+    print(f"\n tles.json written with {len(results)} satellites.")
 
 if __name__ == "__main__":
     fetch()
