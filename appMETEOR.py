@@ -51,7 +51,7 @@ LOCAL_TZ = resolve_timezone(
 tles, fetched_at = load_satellites(SELECTED)
 
 if not tles:
-    st.error("❌ `tles.json` not found or contains no matching satellites.")
+    st.error("`tles.json` not found or contains no matching satellites.")
     st.stop()
 
 render_tle_age(fetched_at)
@@ -123,19 +123,19 @@ else:
             row = df.iloc[sel_idx]
 
             st.divider()
-            st.subheader(f"📡 {row['Satellite']} — {row['Local Time']}")
+            st.subheader(f"{row['Satellite']} — {row['Local Time']}")
 
             timeline = compute_pass_timeline(sat, observer, t_rise, t_set, LOCAL_TZ)
 
             col_plot, _ = st.columns([1, 1])
             with col_plot:
-                st.markdown("**🌐 Sky Plot**")
+                st.markdown("**Sky Plot**")
                 st.plotly_chart(
                     make_sky_plot(timeline, sat.name),
                     use_container_width=True,
                     key="skyplot",
                 )
-                st.markdown("**🗺️ Satellite Path**")
+                st.markdown("**Satellite Path**")
                 st.plotly_chart(
                     make_ground_track(timeline, sat.name, LAT, LNG),
                     use_container_width=True,
@@ -143,7 +143,7 @@ else:
                 )
 
             # Minute-by-minute table
-            st.markdown("**⏱️ Minute-by-minute tracking**")
+            st.markdown("**Minute-by-minute tracking**")
             duration_s = (t_set - t_rise) * 24 * 3600
             from tle_utils import get_compass_dir
             table_rows = []
