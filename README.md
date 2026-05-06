@@ -16,7 +16,7 @@ A Streamlit app that predicts upcoming passes of Meteor-M and MetOp weather sate
 ## Project Structure
  
 ```
-├── appMETEOR.py              # Entry point
+├── appMETEOR.py        # Entry point
 ├── charts.py           # Sky plot and ground track (Plotly)
 ├── predictions.py      # Pass finding and timeline computation
 ├── sidebar.py          # Sidebar UI
@@ -53,7 +53,7 @@ TLEs are automatically refreshed every 12 hours via a GitHub Actions workflow, s
 ## Running
  
 ```bash
-streamlit run app.py
+streamlit run appMETEOR.py
 ```
  
 ## Usage
@@ -70,4 +70,5 @@ This is a personal project but if you're into weather satellite reception and wa
 ## Satellites Covered
  
 - Meteor-M series (Russian weather satellites, 137 MHz LRPT / 1.7 GHz HRPT)
-- MetOp series (EUMETSAT polar orbiters, 1.7 GHz AHRPT)
+- MetOp series (EUMETSAT polar orbiters, 1.7013 GHz AHRPT)
+- Arctic Weather Satellite
