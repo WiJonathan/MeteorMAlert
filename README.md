@@ -22,7 +22,7 @@ A Streamlit app that predicts upcoming passes of Meteor-M and MetOp weather sate
 ├── sidebar.py          # Sidebar UI
 ├── tle_utils.py        # TLE loading and satellite helpers
 ├── timezone_utils.py   # Timezone parsing and resolution
-└── tles.json           # TLE data (not in repo — see Setup)
+└── tles.json           # TLE data
 ```
  
 ## Setup
